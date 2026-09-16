@@ -18,4 +18,8 @@ public class CityServiceImpl implements CityService {
     public List<City> listAll() {
         return cityMapper.selectList(null);
     }
+    @Override
+    public City getById(Long id) {
+        return cityMapper.selectById(id);
+    }
 }
