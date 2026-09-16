@@ -1,39 +1,40 @@
-# 硅基流动 Embedding 配置踩坑记录
+## RAG 检索链路设计
 
-## 问题现象
+### 整体流程
+1. POI 数据从 MySQL 读取
+2. 拼接文本（name + category + address）
+3. 向量化（硅基流动 BAAI/bge-m3）
+4. 存入 Redis Stack（poi-index 索引）
+5. 用户查询向量化
+6. 相似度检索返回 Top K
 
-Postman 调硅基流动 API 成功，但 Java 代码报 `400 Model does not exist`。
+### 关键决策
+- Redis VectorStore 只能用 database 0（RediSearch 硬限制）
+- OpenAiEmbeddingModel 必须传 options，否则用默认模型名
+- Spring AI 1.0.0-M6 API：model() 不是 withModel()
 
-## 排查过程
+## POI 数据质量问题
 
-1. Postman 测试 → 确认硅基流动 API 本身没问题
-2. Java 代码加日志 → 看到请求发出去了，但返回 400
-3. 对比 Postman 和 Java 的请求 → 发现 Java 没传 model 字段
+### 问题现象
+检索"苏州出片"返回了"中国铁建""京东之家"等无关 POI。
 
-## 根本原因
+### 原因分析
+1. 高德 API 关键词太宽泛，混入商业 POI
+2. 缺少旅行视角字段（photo_score、photo_spot 等）
+3. 向量检索在没有相关 POI 时，返回"随机"结果
 
-Spring AI 的 `OpenAiEmbeddingModel` 默认使用 OpenAI 的模型名，
-没有传我在 `application.yaml` 里配的 `BAAI/bge-m3`。
+### 解决方向
+1. 换关键词（用类别词而非具体名称）
+2. 高德类别过滤（只保留风景名胜、博物馆等）
+3. 人工精选 + 人工补字段
 
-## 解决方案
+### 结论
+RAG 的效果上限由知识库质量决定，不是模型决定的。
 
-在 `EmbeddingConfig.java` 里显式指定模型：
+## 后续优化计划
 
-\`\`\`java
-OpenAiEmbeddingOptions options = OpenAiEmbeddingOptions.builder()
-.model(model)
-.build();
-
-return new OpenAiEmbeddingModel(openAiApi, MetadataMode.EMBED, options);
-\`\`\`
-
-注意 Spring AI 1.0.0-M6 的 API 细节：
-- Builder 方法是 `model(...)` 不是 `withModel(...)`
-- 构造函数是三参数 `(OpenAiApi, MetadataMode, OpenAiEmbeddingOptions)`
-
-## 排查心得
-
-"Postman 能通、Java 不通"这类问题的通用排查思路：
-1. Postman 先测原始 API
-2. Java 加日志看实际请求
-3. 对比差异，定位到具体字段
+- [ ] 换关键词重新拉高德 POI
+- [ ] 人工筛选 20-30 个真正的 Citywalk POI
+- [ ] 补充 photo_score、photo_spot、description 字段
+- [ ] 重新向量化
+- [ ] 验证检索质量提升
