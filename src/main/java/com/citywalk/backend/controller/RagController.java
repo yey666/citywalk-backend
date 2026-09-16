@@ -1,12 +1,12 @@
 package com.citywalk.backend.controller;
 
+import com.citywalk.backend.service.PoiVectorService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.embedding.EmbeddingResponse;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 import java.util.List;
@@ -17,23 +17,30 @@ import java.util.List;
 public class RagController {
 
     private final EmbeddingModel embeddingModel;
+    private final VectorStore vectorStore;
+    private final PoiVectorService poiVectorService;
 
     @GetMapping("/test-embedding")
     public String testEmbedding(@RequestParam String text) {
-        try {
-            System.out.println("===== 开始调用 Embedding =====");
-            System.out.println("文本：" + text);
+        float[] vector = embeddingModel.embed(text);
+        return "向量维度：" + vector.length + "，前 5 个值：" +
+                Arrays.toString(Arrays.copyOf(vector, 5));
+    }
 
-            EmbeddingResponse response = embeddingModel.embedForResponse(List.of(text));
-            float[] vector = response.getResults().get(0).getOutput();
+    @GetMapping("/init-poi-vectors")
+    public String initPoiVectors() {
+        int count = poiVectorService.initPoiVectors();
+        return "成功向量化 " + count + " 个 POI";
+    }
 
-            System.out.println("===== 调用成功，向量维度：" + vector.length);
-            return "向量维度：" + vector.length + "，前 5 个值：" +
-                    Arrays.toString(Arrays.copyOf(vector, 5));
-        } catch (Exception e) {
-            System.out.println("===== 调用失败 =====");
-            e.printStackTrace();
-            return "调用失败：" + e.getMessage() + " | 异常类型：" + e.getClass().getName();
-        }
+    @GetMapping("/search")
+    public List<Document> search(@RequestParam String query,
+                                 @RequestParam(defaultValue = "5") int topK) {
+        return vectorStore.similaritySearch(
+                SearchRequest.builder()
+                        .query(query)
+                        .topK(topK)
+                        .build()
+        );
     }
 }

@@ -5,9 +5,14 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.redis.RedisVectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.HostAndPort;
+import redis.clients.jedis.JedisPooled;
 
 @Configuration
 public class EmbeddingConfig {
@@ -28,12 +33,26 @@ public class EmbeddingConfig {
                 .apiKey(apiKey)
                 .build();
 
-        // 用 model(...) 而不是 withModel(...)
         OpenAiEmbeddingOptions options = OpenAiEmbeddingOptions.builder()
                 .model(model)
                 .build();
 
-        // 用三参数构造函数：(OpenAiApi, MetadataMode, OpenAiEmbeddingOptions)
         return new OpenAiEmbeddingModel(openAiApi, MetadataMode.EMBED, options);
+    }
+
+    @Bean
+    public VectorStore vectorStore(EmbeddingModel embeddingModel) {
+        JedisPooled jedisPooled = new JedisPooled(
+                new HostAndPort("localhost", 6379),
+                DefaultJedisClientConfig.builder()
+                        .database(0)
+                        .build()
+        );
+
+        return RedisVectorStore.builder(jedisPooled, embeddingModel)
+                .indexName("poi-index")
+                .prefix("poi:")
+                .initializeSchema(true)
+                .build();
     }
 }
