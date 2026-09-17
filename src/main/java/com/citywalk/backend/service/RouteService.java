@@ -16,4 +16,7 @@ public interface RouteService {
      * 查询路线详情（含节点）
      */
     RouteDetailVO getDetail(Long routeId);
+    boolean saveRoute(Long userId, Long routeId);
+
+    List<Route> listByUser(Long userId);
 }

@@ -5,6 +5,10 @@ import com.citywalk.backend.entity.Route;
 import com.citywalk.backend.service.RouteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import com.citywalk.backend.util.UserContext;
+import org.springframework.web.bind.annotation.PostMapping;
+import java.util.HashMap;
+import java.util.Map;
 
 import java.util.List;
 
@@ -31,5 +35,20 @@ public class RouteController {
     @GetMapping("/route/{id}")
     public RouteDetailVO detail(@PathVariable Long id) {
         return routeService.getDetail(id);
+    }
+    @PostMapping("/route/{id}/save")
+    public Map<String, Object> saveRoute(@PathVariable Long id) {
+        Long userId = UserContext.getUserId();
+        boolean success = routeService.saveRoute(userId, id);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", success);
+        result.put("routeId", id);
+        return result;
+    }
+
+    @GetMapping("/user/routes")
+    public List<Route> myRoutes() {
+        Long userId = UserContext.getUserId();
+        return routeService.listByUser(userId);
     }
 }

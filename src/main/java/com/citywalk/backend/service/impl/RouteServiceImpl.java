@@ -12,6 +12,9 @@ import com.citywalk.backend.service.RouteService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import com.citywalk.backend.entity.UserRoute;
+import com.citywalk.backend.mapper.UserRouteMapper;
+import java.util.stream.Collectors;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +27,7 @@ public class RouteServiceImpl implements RouteService {
     private final RouteMapper routeMapper;
     private final RouteNodeMapper routeNodeMapper;
     private final PoiMapper poiMapper;
+    private final UserRouteMapper userRouteMapper;
 
     @Override
     public List<Route> listByCity(Long cityId) {
@@ -82,5 +86,50 @@ public class RouteServiceImpl implements RouteService {
         vo.setNodes(nodeDetails);
 
         return vo;
+    }
+    @Override
+    public boolean saveRoute(Long userId, Long routeId) {
+        // 检查路线是否存在
+        Route route = routeMapper.selectById(routeId);
+        if (route == null) {
+            throw new RuntimeException("路线不存在");
+        }
+
+        // 检查是否已收藏
+        Long count = userRouteMapper.selectCount(
+                new LambdaQueryWrapper<UserRoute>()
+                        .eq(UserRoute::getUserId, userId)
+                        .eq(UserRoute::getRouteId, routeId)
+        );
+        if (count > 0) {
+            throw new RuntimeException("已收藏该路线");
+        }
+
+        // 保存
+        UserRoute ur = new UserRoute();
+        ur.setUserId(userId);
+        ur.setRouteId(routeId);
+        userRouteMapper.insert(ur);
+
+        return true;
+    }
+
+    @Override
+    public List<Route> listByUser(Long userId) {
+        List<UserRoute> userRoutes = userRouteMapper.selectList(
+                new LambdaQueryWrapper<UserRoute>()
+                        .eq(UserRoute::getUserId, userId)
+                        .orderByDesc(UserRoute::getCreatedAt)
+        );
+
+        if (userRoutes.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<Long> routeIds = userRoutes.stream()
+                .map(UserRoute::getRouteId)
+                .collect(Collectors.toList());
+
+        return routeMapper.selectBatchIds(routeIds);
     }
 }
