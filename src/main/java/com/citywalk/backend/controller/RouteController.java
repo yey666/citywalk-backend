@@ -8,6 +8,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import com.citywalk.backend.dto.TransitPlanResponse;
+import com.citywalk.backend.service.TransitPlanService;
 
 import java.util.HashMap;
 import java.util.List;
@@ -25,6 +27,13 @@ public class RouteController {
     @GetMapping("/city/{cityId}/routes")
     public List<Route> listByCity(@PathVariable Long cityId) {
         return routeService.listByCity(cityId);
+    }
+    private final TransitPlanService transitPlanService;
+
+    @Operation(summary = "查询路线各节点间的公交/地铁方案")
+    @GetMapping("/route/{id}/transit")
+    public TransitPlanResponse transit(@PathVariable Long id) {
+        return transitPlanService.planByRoute(id);
     }
 
     @Operation(summary = "查询路线详情")
@@ -50,4 +59,5 @@ public class RouteController {
         Long userId = UserContext.getUserId();
         return routeService.listByUser(userId);
     }
+
 }
