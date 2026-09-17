@@ -32,11 +32,10 @@ public class PoiVectorServiceImpl implements PoiVectorService {
         List<Document> documents = new ArrayList<>();
         for (Poi poi : pois) {
             // 拼接检索文本：名称 + 类别 + 地址
-            String text = String.join(" ",
-                    poi.getName() != null ? poi.getName() : "",
-                    poi.getCategory() != null ? poi.getCategory() : "",
-                    poi.getAddress() != null ? poi.getAddress() : ""
-            );
+            String text = "poiId:" + poi.getId() + " " +
+                    (poi.getName() != null ? poi.getName() : "") + " " +
+                    (poi.getCategory() != null ? poi.getCategory() : "") + " " +
+                    (poi.getAddress() != null ? poi.getAddress() : "");
 
             // 元数据：保留 poiId，检索后能用它反查 POI
             Map<String, Object> metadata = new HashMap<>();

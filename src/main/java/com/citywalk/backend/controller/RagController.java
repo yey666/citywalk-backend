@@ -1,6 +1,9 @@
 package com.citywalk.backend.controller;
 
+import com.citywalk.backend.dto.RouteGenerateRequest;
+import com.citywalk.backend.dto.RouteGenerateResponse;
 import com.citywalk.backend.service.PoiVectorService;
+import com.citywalk.backend.service.RouteGenerateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -19,6 +22,7 @@ public class RagController {
     private final EmbeddingModel embeddingModel;
     private final VectorStore vectorStore;
     private final PoiVectorService poiVectorService;
+    private final RouteGenerateService routeGenerateService;
 
     @GetMapping("/test-embedding")
     public String testEmbedding(@RequestParam String text) {
@@ -42,5 +46,10 @@ public class RagController {
                         .topK(topK)
                         .build()
         );
+    }
+
+    @PostMapping("/generate-route")
+    public RouteGenerateResponse generateRoute(@RequestBody RouteGenerateRequest request) {
+        return routeGenerateService.generate(request);
     }
 }
