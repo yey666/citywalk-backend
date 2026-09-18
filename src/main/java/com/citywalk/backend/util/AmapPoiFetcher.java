@@ -8,11 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 import java.math.BigDecimal;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,99 +19,113 @@ import java.util.List;
 public class AmapPoiFetcher {
 
     private final AmapConfig amapConfig;
-
     private final PoiMapper poiMapper;
-
     private final RestTemplate restTemplate = new RestTemplate();
 
-    /**
-     * 苏州 30 个 POI 名称（第一轮占位数据）
-     */
-    private static final String[] SUZHOU_POIS = {
-            "拙政园", "狮子林", "苏州博物馆", "平江路", "山塘街", "观前街",
-            "网师园", "沧浪亭", "十全街", "双塔市集", "定慧寺巷", "艺圃",
-            "耦园", "怡园", "可园", "苏州美术馆", "苏州丝绸博物馆",
-            "金鸡湖", "诚品书店", "苏州中心", "李公堤", "斜塘老街",
-            "独墅湖教堂", "白塘生态植物园", "苏州大学",
-            "同得兴", "哑巴生煎", "松鹤楼", "得月楼", "三万昌茶馆"
+    // 要拉取的类别
+    private static final String[] TYPES = {
+            "110100",   // 风景名胜
+            "110200",   // 公园广场
+            "140000",   // 餐饮服务
     };
 
-    /**
-     * 拉取苏州 30 个 POI 并存入数据库
-     * @param cityId 苏州在 city 表里的 id（你数据库里是 1）
-     * @return 成功入库数量
-     */
-    public int fetchSuzhouPois(Long cityId) {
-        int success = 0;
-        for (String keyword : SUZHOU_POIS) {
-            try {
-                // 先查是否已存在
-                Long count = poiMapper.selectCount(
-                        new LambdaQueryWrapper<Poi>()
-                                .eq(Poi::getCityId, cityId)
-                                .eq(Poi::getName, keyword)
-                );
-                if (count > 0) {
-                    log.info("已存在，跳过：{}", keyword);
-                    continue;
-                }
+    // 佛山 adcode
+    private static final String FOSHAN_ADCODE = "440600";
 
-                Poi poi = fetchOne(keyword, cityId);
-                if (poi != null) {
-                    poiMapper.insert(poi);
-                    success++;
-                    log.info("成功入库：{}", keyword);
-                } else {
-                    log.warn("未找到：{}", keyword);
+    /**
+     * 拉取佛山的景点和餐厅
+     */
+    public int fetchFoshanPois(Long cityId) {
+        int total = 0;
+        for (String type : TYPES) {
+            try {
+                log.info("===== 开始拉取类别: {}", type);
+                List<Poi> pois = fetchByType(type, cityId);
+                log.info("===== 类别 {} 解析出 {} 个 POI", type, pois.size());
+
+                for (Poi poi : pois) {
+                    // 去重
+                    Long count = poiMapper.selectCount(
+                            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Poi>()
+                                    .eq(Poi::getCityId, cityId)
+                                    .eq(Poi::getName, poi.getName())
+                    );
+                    if (count == 0) {
+                        poiMapper.insert(poi);
+                        total++;
+                    }
                 }
-                Thread.sleep(300);
+                log.info("===== 类别 {} 完成，累计入库 {} 条", type, total);
+                Thread.sleep(500);
             } catch (Exception e) {
-                log.error("拉取 {} 失败：{}", keyword, e.getMessage());
+                log.error("===== 拉取类别 {} 失败", type, e);
             }
         }
-        return success;
+        return total;
     }
 
     /**
-     * 调高德 API 查一个 POI
+     * 按类别拉取一个城市的所有 POI
      */
-    private Poi fetchOne(String keyword, Long cityId) throws Exception {
+    private List<Poi> fetchByType(String type, Long cityId) throws Exception {
         String url = amapConfig.getBaseUrl() + "/v3/place/text"
                 + "?key=" + amapConfig.getKey()
-                + "&keywords=" + URLEncoder.encode(keyword, StandardCharsets.UTF_8)
-                + "&city=" + URLEncoder.encode("苏州", StandardCharsets.UTF_8)
-                + "&offset=1&page=1&extensions=all";
+                + "&types=" + type
+                + "&city=" + FOSHAN_ADCODE
+                + "&citylimit=true"
+                + "&offset=25&page=1&extensions=all";
+
+        log.info("===== 请求 URL: {}", url);
 
         AmapPoiResponse response = restTemplate.getForObject(url, AmapPoiResponse.class);
 
+        log.info("===== 高德返回: status={}, info={}, count={}, pois={}",
+                response != null ? response.getStatus() : "null",
+                response != null ? response.getInfo() : "null",
+                response != null ? response.getCount() : "null",
+                response != null && response.getPois() != null ? response.getPois().size() : "null");
+
+        List<Poi> result = new ArrayList<>();
         if (response == null || !"1".equals(response.getStatus())
-                || response.getPois() == null || response.getPois().isEmpty()) {
-            return null;
+                || response.getPois() == null) {
+            log.warn("===== 响应无效，直接返回空");
+            return result;
         }
 
-        AmapPoiResponse.PoiItem item = response.getPois().get(0);
+        for (AmapPoiResponse.PoiItem item : response.getPois()) {
+            log.info("===== POI: name={}, location={}, type={}",
+                    item.getName(), item.getLocation(), item.getType());
 
-        // location 格式："经度,纬度"
-        String[] lngLat = item.getLocation().split(",");
-        BigDecimal lng = new BigDecimal(lngLat[0]);
-        BigDecimal lat = new BigDecimal(lngLat[1]);
+            if (item.getLocation() == null || !item.getLocation().contains(",")) {
+                log.warn("===== 跳过无效 location: {}", item.getName());
+                continue;
+            }
 
-        Poi poi = new Poi();
-        poi.setCityId(cityId);
-        poi.setName(item.getName());
-        poi.setCategory(item.getType() != null && item.getType().contains(";")
-                ? item.getType().split(";")[0]
-                : item.getType());
-        poi.setAddress(item.getAddress());
-        poi.setLat(lat);
-        poi.setLng(lng);
-        poi.setPhotoScore(3);
-        poi.setFoodScore(3);
-        poi.setHistoryScore(3);
-        poi.setCultureScore(3);
-        poi.setPriceLevel(0);
-        poi.setDescription("");
+            try {
+                String[] lngLat = item.getLocation().split(",");
 
-        return poi;
+                Poi poi = new Poi();
+                poi.setCityId(cityId);
+                poi.setName(item.getName());
+                poi.setCategory(item.getType() != null && item.getType().contains(";")
+                        ? item.getType().split(";")[0]
+                        : item.getType());
+                poi.setAddress(item.getAddress());
+                poi.setLng(new BigDecimal(lngLat[0].trim()));
+                poi.setLat(new BigDecimal(lngLat[1].trim()));
+                poi.setPhotoScore(3);
+                poi.setFoodScore(3);
+                poi.setHistoryScore(3);
+                poi.setCultureScore(3);
+                poi.setPriceLevel(0);
+                poi.setDescription("");
+
+                result.add(poi);
+            } catch (Exception e) {
+                log.error("===== 解析 POI 失败: name={}, location={}", item.getName(), item.getLocation(), e);
+            }
+        }
+
+        return result;
     }
 }
