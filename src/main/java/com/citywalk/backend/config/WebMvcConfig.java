@@ -18,6 +18,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns(
                         "/api/user/**",
                         "/api/route/*/save",
+                        "/api/route/save-draft",
                         "/api/route/*/collect",
                         "/api/post/**"
                 )

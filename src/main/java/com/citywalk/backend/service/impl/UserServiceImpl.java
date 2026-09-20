@@ -28,7 +28,7 @@ public class UserServiceImpl implements UserService {
                 new LambdaQueryWrapper<User>().eq(User::getUsername, username)
         );
         if (count > 0) {
-            throw new RuntimeException("用户名已存在");
+            throw new IllegalArgumentException("用户名已存在");
         }
 
         // 2. 创建用户
@@ -57,12 +57,12 @@ public class UserServiceImpl implements UserService {
                 new LambdaQueryWrapper<User>().eq(User::getUsername, username)
         );
         if (user == null) {
-            throw new RuntimeException("用户名或密码错误");
+            throw new IllegalArgumentException("用户名或密码错误");
         }
 
         // 2. 校验密码
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            throw new RuntimeException("用户名或密码错误");
+            throw new IllegalArgumentException("用户名或密码错误");
         }
 
         // 3. 生成 token
