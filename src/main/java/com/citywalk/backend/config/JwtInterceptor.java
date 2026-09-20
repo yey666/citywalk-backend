@@ -16,23 +16,24 @@ public class JwtInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        // GET 请求直接放行（查询类接口不需要登录）
-        if ("GET".equalsIgnoreCase(request.getMethod())) {
-            return true;
-        }
-
-        // 其他请求校验 token
         String authHeader = request.getHeader("Authorization");
+        boolean isGet = "GET".equalsIgnoreCase(request.getMethod());
+
+        // 没有 Authorization
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            if (isGet) return true;
             response.setStatus(401);
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write("{\"error\":\"未登录\"}");
             return false;
         }
 
+        // 有 Authorization —— 解析 token
         String token = authHeader.substring(7);
         Long userId = jwtUtil.getUserIdFromToken(token);
+
         if (userId == null) {
+            if (isGet) return true;
             response.setStatus(401);
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write("{\"error\":\"token 无效或已过期\"}");
@@ -45,7 +46,6 @@ public class JwtInterceptor implements HandlerInterceptor {
 
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
-        // 请求结束后清理，防止内存泄漏
         UserContext.clear();
     }
 }

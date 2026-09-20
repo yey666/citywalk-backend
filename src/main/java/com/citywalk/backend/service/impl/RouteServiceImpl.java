@@ -323,4 +323,30 @@ public class RouteServiceImpl implements RouteService {
 
         return result;
     }
+    @Override
+    public List<Route> listMyPlans(Long userId) {
+        return routeMapper.selectList(
+                new LambdaQueryWrapper<Route>()
+                        .eq(Route::getUserId, userId)
+                        .eq(Route::getStatus, "saved")
+                        .orderByDesc(Route::getId)
+        );
+    }
+    @Override
+    @Transactional
+    public void deleteRoute(Long routeId, Long userId) {
+        Route route = routeMapper.selectById(routeId);
+        if (route == null) {
+            throw new IllegalArgumentException("路线不存在");
+        }
+        if (route.getUserId() == null || !route.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("无权删除该路线");
+        }
+        // 先删节点
+        routeNodeMapper.delete(
+                new LambdaQueryWrapper<RouteNode>().eq(RouteNode::getRouteId, routeId)
+        );
+        // 再删路线
+        routeMapper.deleteById(routeId);
+    }
 }

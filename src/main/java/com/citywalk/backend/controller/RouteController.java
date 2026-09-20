@@ -13,6 +13,7 @@ import com.citywalk.backend.dto.TransitPlanResponse;
 import com.citywalk.backend.service.TransitPlanService;
 import com.citywalk.backend.dto.OptimizeRequest;
 import com.citywalk.backend.dto.OptimizeResponse;
+import org.springframework.web.bind.annotation.DeleteMapping;
 
 import java.util.HashMap;
 import java.util.List;
@@ -75,6 +76,21 @@ public class RouteController {
     @PostMapping("/route/draft/optimize")
     public OptimizeResponse optimizeDraft(@RequestBody OptimizeRequest request) {
         return routeService.optimizeDraft(request);
+    }
+    @Operation(summary = "我的计划列表")
+    @GetMapping("/user/my-plans")
+    public List<Route> myPlans() {
+        Long userId = UserContext.getUserId();
+        return routeService.listMyPlans(userId);
+    }
+    @Operation(summary = "删除路线")
+    @DeleteMapping("/route/{id}")
+    public Map<String, Object> deleteRoute(@PathVariable Long id) {
+        Long userId = UserContext.getUserId();
+        routeService.deleteRoute(id, userId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        return result;
     }
 
 }

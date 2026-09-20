@@ -26,4 +26,6 @@ public interface RouteService {
     Long saveDraft(SaveDraftRequest request);
     OptimizeResponse optimizeDraft(OptimizeRequest request);
     List<Route> listByUser(Long userId);
+    List<Route> listMyPlans(Long userId);
+    void deleteRoute(Long routeId, Long userId);
 }
