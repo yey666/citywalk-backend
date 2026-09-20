@@ -16,7 +16,12 @@ public class JwtInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        // 从 Header 拿 token
+        // GET 请求直接放行（查询类接口不需要登录）
+        if ("GET".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+
+        // 其他请求校验 token
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             response.setStatus(401);
@@ -25,7 +30,7 @@ public class JwtInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        String token = authHeader.substring(7); // 去掉 "Bearer "
+        String token = authHeader.substring(7);
         Long userId = jwtUtil.getUserIdFromToken(token);
         if (userId == null) {
             response.setStatus(401);
@@ -34,7 +39,6 @@ public class JwtInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        // 存进 ThreadLocal
         UserContext.setUserId(userId);
         return true;
     }

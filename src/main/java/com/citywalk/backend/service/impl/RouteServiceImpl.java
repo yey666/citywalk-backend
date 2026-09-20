@@ -2,22 +2,25 @@ package com.citywalk.backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.citywalk.backend.dto.RouteDetailVO;
+import com.citywalk.backend.dto.SaveDraftRequest;
 import com.citywalk.backend.entity.Poi;
 import com.citywalk.backend.entity.Route;
 import com.citywalk.backend.entity.RouteNode;
+import com.citywalk.backend.entity.UserRoute;
 import com.citywalk.backend.mapper.PoiMapper;
 import com.citywalk.backend.mapper.RouteMapper;
 import com.citywalk.backend.mapper.RouteNodeMapper;
+import com.citywalk.backend.mapper.UserRouteMapper;
 import com.citywalk.backend.service.RouteService;
+import com.citywalk.backend.util.UserContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import com.citywalk.backend.entity.UserRoute;
-import com.citywalk.backend.mapper.UserRouteMapper;
-import java.util.stream.Collectors;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -87,15 +90,14 @@ public class RouteServiceImpl implements RouteService {
 
         return vo;
     }
+
     @Override
     public boolean saveRoute(Long userId, Long routeId) {
-        // 检查路线是否存在
         Route route = routeMapper.selectById(routeId);
         if (route == null) {
             throw new RuntimeException("路线不存在");
         }
 
-        // 检查是否已收藏
         Long count = userRouteMapper.selectCount(
                 new LambdaQueryWrapper<UserRoute>()
                         .eq(UserRoute::getUserId, userId)
@@ -105,7 +107,6 @@ public class RouteServiceImpl implements RouteService {
             throw new RuntimeException("已收藏该路线");
         }
 
-        // 保存
         UserRoute ur = new UserRoute();
         ur.setUserId(userId);
         ur.setRouteId(routeId);
@@ -132,4 +133,48 @@ public class RouteServiceImpl implements RouteService {
 
         return routeMapper.selectBatchIds(routeIds);
     }
-}
+
+    @Override
+    @Transactional
+    public Long saveDraft(SaveDraftRequest request) {
+        Long userId = UserContext.getUserId();
+
+        // 1. 幂等校验
+        Route existing = routeMapper.selectOne(
+                new LambdaQueryWrapper<Route>()
+                        .eq(Route::getUserId, userId)
+                        .eq(Route::getCityId, request.getCityId())
+                        .eq(Route::getStatus, "saved")
+                        .eq(Route::getTitle, request.getTitle())
+                        .orderByDesc(Route::getId)
+                        .last("LIMIT 1")
+        );
+        if (existing != null) {
+            return existing.getId();
+        }
+
+        // 2. 保存 route
+        Route route = new Route();
+        route.setCityId(request.getCityId());
+        route.setTitle(request.getTitle());
+        route.setTheme(request.getTheme());
+        route.setDuration(request.getDuration());
+        route.setDifficulty(request.getDifficulty());
+        route.setStatus("saved");
+        route.setAiGenerated(0);
+        route.setUserId(userId);
+        routeMapper.insert(route);
+
+        // 3. 保存 route_node
+        for (SaveDraftRequest.Node node : request.getNodes()) {
+            RouteNode rn = new RouteNode();
+            rn.setRouteId(route.getId());
+            rn.setPoiId(node.getPoiId());
+            rn.setSortOrder(node.getSortOrder());
+            rn.setStayDuration(node.getStayDuration());
+            rn.setTip(node.getTip());
+            routeNodeMapper.insert(rn);
+        }
+
+        return route.getId();
+    }}

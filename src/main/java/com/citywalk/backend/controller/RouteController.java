@@ -1,6 +1,7 @@
 package com.citywalk.backend.controller;
 
 import com.citywalk.backend.dto.RouteDetailVO;
+import com.citywalk.backend.dto.SaveDraftRequest;
 import com.citywalk.backend.entity.Route;
 import com.citywalk.backend.service.RouteService;
 import com.citywalk.backend.util.UserContext;
@@ -58,6 +59,15 @@ public class RouteController {
     public List<Route> myRoutes() {
         Long userId = UserContext.getUserId();
         return routeService.listByUser(userId);
+    }
+    @Operation(summary = "保存用户编辑的路线草稿")
+    @PostMapping("/route/save-draft")
+    public Map<String, Object> saveDraft(@RequestBody SaveDraftRequest request) {
+        Long routeId = routeService.saveDraft(request);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        result.put("routeId", routeId);
+        return result;
     }
 
 }

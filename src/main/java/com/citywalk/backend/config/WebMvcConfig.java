@@ -14,21 +14,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(jwtInterceptor)
-                // 拦截的路径
-                .addPathPatterns(
-                        "/api/user/**",
-                        "/api/route/*/save",
-                        "/api/route/save-draft",
-                        "/api/route/*/collect",
-                        "/api/post/**"
-                )
-                // 不拦截的路径
+                .addPathPatterns("/api/**")     // 拦截所有 API
                 .excludePathPatterns(
                         "/api/auth/**",
                         "/api/city/**",
-                        "/api/rag/**",
-                        "/api/route/generate",
-                        "/api/route/*"  // 看路线详情不需要登录
+                        "/api/rag/**"
                 );
     }
 }
