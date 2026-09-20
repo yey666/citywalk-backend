@@ -17,6 +17,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.citywalk.backend.dto.OptimizeRequest;
+import com.citywalk.backend.dto.OptimizeResponse;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -177,4 +182,145 @@ public class RouteServiceImpl implements RouteService {
         }
 
         return route.getId();
-    }}
+    }
+    @Override
+    public OptimizeResponse optimizeDraft(OptimizeRequest request) {
+        List<OptimizeRequest.Node> nodes = request.getNodes();
+
+        if (nodes == null || nodes.size() <= 1) {
+            OptimizeResponse response = new OptimizeResponse();
+            response.setOptimizedNodes(nodes);
+            response.setOriginalDistance(0.0);
+            response.setOptimizedDistance(0.0);
+            response.setSavedDistance(0.0);
+            return response;
+        }
+
+        // 1. 计算原始总距离
+        double originalDistance = totalDistance(nodes);
+
+        // 2. 优化
+        List<OptimizeRequest.Node> optimized;
+        if (nodes.size() <= 6) {
+            // 暴力枚举（固定第一个点）
+            optimized = bruteForceOptimize(nodes);
+        } else {
+            // 贪心（固定第一个点）
+            optimized = greedyOptimize(nodes);
+        }
+
+        // 3. 计算优化后总距离
+        double optimizedDistance = totalDistance(optimized);
+
+        OptimizeResponse response = new OptimizeResponse();
+        response.setOptimizedNodes(optimized);
+        response.setOriginalDistance(Math.round(originalDistance * 100) / 100.0);
+        response.setOptimizedDistance(Math.round(optimizedDistance * 100) / 100.0);
+        response.setSavedDistance(Math.round((originalDistance - optimizedDistance) * 100) / 100.0);
+        return response;
+    }
+
+    /**
+     * 计算一条路线的总距离
+     */
+    private double totalDistance(List<OptimizeRequest.Node> nodes) {
+        double total = 0;
+        for (int i = 0; i < nodes.size() - 1; i++) {
+            total += haversine(
+                    nodes.get(i).getLat(), nodes.get(i).getLng(),
+                    nodes.get(i + 1).getLat(), nodes.get(i + 1).getLng()
+            );
+        }
+        return total;
+    }
+
+    /**
+     * Haversine 公式：计算两点球面距离（km）
+     */
+    private double haversine(double lat1, double lng1, double lat2, double lng2) {
+        double R = 6371;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLng = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    /**
+     * 暴力枚举：固定第一个点，全排列其他点，选总距离最短的
+     */
+    private List<OptimizeRequest.Node> bruteForceOptimize(List<OptimizeRequest.Node> nodes) {
+        OptimizeRequest.Node first = nodes.get(0);
+        List<OptimizeRequest.Node> rest = new ArrayList<>(nodes.subList(1, nodes.size()));
+
+        List<OptimizeRequest.Node> best = null;
+        double bestDistance = Double.MAX_VALUE;
+
+        // 生成所有排列
+        List<List<OptimizeRequest.Node>> permutations = new ArrayList<>();
+        permute(rest, 0, permutations);
+
+        for (List<OptimizeRequest.Node> perm : permutations) {
+            List<OptimizeRequest.Node> candidate = new ArrayList<>();
+            candidate.add(first);
+            candidate.addAll(perm);
+            double d = totalDistance(candidate);
+            if (d < bestDistance) {
+                bestDistance = d;
+                best = candidate;
+            }
+        }
+
+        return best != null ? best : nodes;
+    }
+
+    /**
+     * 生成所有排列（递归）
+     */
+    private void permute(List<OptimizeRequest.Node> list, int start, List<List<OptimizeRequest.Node>> result) {
+        if (start == list.size() - 1) {
+            result.add(new ArrayList<>(list));
+            return;
+        }
+        for (int i = start; i < list.size(); i++) {
+            Collections.swap(list, start, i);
+            permute(list, start + 1, result);
+            Collections.swap(list, start, i);
+        }
+    }
+
+    /**
+     * 贪心算法：固定第一个点，每次选最近的未访问点
+     */
+    private List<OptimizeRequest.Node> greedyOptimize(List<OptimizeRequest.Node> nodes) {
+        List<OptimizeRequest.Node> result = new ArrayList<>();
+        List<OptimizeRequest.Node> remaining = new ArrayList<>(nodes);
+
+        // 第一个点固定
+        OptimizeRequest.Node current = remaining.remove(0);
+        result.add(current);
+
+        while (!remaining.isEmpty()) {
+            // 找离 current 最近的
+            OptimizeRequest.Node nearest = null;
+            double minDist = Double.MAX_VALUE;
+            for (OptimizeRequest.Node node : remaining) {
+                double d = haversine(
+                        current.getLat(), current.getLng(),
+                        node.getLat(), node.getLng()
+                );
+                if (d < minDist) {
+                    minDist = d;
+                    nearest = node;
+                }
+            }
+            result.add(nearest);
+            remaining.remove(nearest);
+            current = nearest;
+        }
+
+        return result;
+    }
+}

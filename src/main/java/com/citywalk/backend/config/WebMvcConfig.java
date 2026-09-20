@@ -18,7 +18,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/api/auth/**",
                         "/api/city/**",
-                        "/api/rag/**"
+                        "/api/rag/**",
+                        "/api/route/generate",
+                        "/api/route/draft/optimize"     // ← 加这个
                 );
     }
 }

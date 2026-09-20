@@ -3,6 +3,10 @@ package com.citywalk.backend.service;
 import com.citywalk.backend.dto.RouteDetailVO;
 import com.citywalk.backend.entity.Route;
 import com.citywalk.backend.dto.SaveDraftRequest;
+import com.citywalk.backend.dto.OptimizeRequest;
+import com.citywalk.backend.dto.OptimizeResponse;
+
+
 
 
 import java.util.List;
@@ -20,6 +24,6 @@ public interface RouteService {
     RouteDetailVO getDetail(Long routeId);
     boolean saveRoute(Long userId, Long routeId);
     Long saveDraft(SaveDraftRequest request);
-
+    OptimizeResponse optimizeDraft(OptimizeRequest request);
     List<Route> listByUser(Long userId);
 }

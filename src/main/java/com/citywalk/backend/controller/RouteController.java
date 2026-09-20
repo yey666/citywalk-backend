@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import com.citywalk.backend.dto.TransitPlanResponse;
 import com.citywalk.backend.service.TransitPlanService;
+import com.citywalk.backend.dto.OptimizeRequest;
+import com.citywalk.backend.dto.OptimizeResponse;
 
 import java.util.HashMap;
 import java.util.List;
@@ -68,6 +70,11 @@ public class RouteController {
         result.put("success", true);
         result.put("routeId", routeId);
         return result;
+    }
+    @Operation(summary = "AI 优化路线顺序")
+    @PostMapping("/route/draft/optimize")
+    public OptimizeResponse optimizeDraft(@RequestBody OptimizeRequest request) {
+        return routeService.optimizeDraft(request);
     }
 
 }
