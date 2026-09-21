@@ -1,6 +1,8 @@
 package com.citywalk.backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.citywalk.backend.dto.OptimizeRequest;
+import com.citywalk.backend.dto.OptimizeResponse;
 import com.citywalk.backend.dto.RouteDetailVO;
 import com.citywalk.backend.dto.SaveDraftRequest;
 import com.citywalk.backend.entity.Poi;
@@ -13,17 +15,14 @@ import com.citywalk.backend.mapper.RouteNodeMapper;
 import com.citywalk.backend.mapper.UserRouteMapper;
 import com.citywalk.backend.service.RouteService;
 import com.citywalk.backend.util.UserContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.citywalk.backend.dto.OptimizeRequest;
-import com.citywalk.backend.dto.OptimizeResponse;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -36,6 +35,8 @@ public class RouteServiceImpl implements RouteService {
     private final RouteNodeMapper routeNodeMapper;
     private final PoiMapper poiMapper;
     private final UserRouteMapper userRouteMapper;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public List<Route> listByCity(Long cityId) {
@@ -51,7 +52,7 @@ public class RouteServiceImpl implements RouteService {
     public RouteDetailVO getDetail(Long routeId) {
         Route route = routeMapper.selectById(routeId);
         if (route == null) {
-            throw new RuntimeException("路线不存在");
+            throw new IllegalArgumentException("路线不存在");
         }
 
         RouteDetailVO vo = new RouteDetailVO();
@@ -64,7 +65,6 @@ public class RouteServiceImpl implements RouteService {
         vo.setBestTime(route.getBestTime());
         vo.setDescription(route.getDescription());
 
-        // 查节点
         List<RouteNode> nodes = routeNodeMapper.selectList(
                 new LambdaQueryWrapper<RouteNode>()
                         .eq(RouteNode::getRouteId, routeId)
@@ -80,7 +80,6 @@ public class RouteServiceImpl implements RouteService {
             detail.setTip(node.getTip());
             detail.setPhotoSpot(node.getPhotoSpot());
 
-            // 补 POI 信息
             Poi poi = poiMapper.selectById(node.getPoiId());
             if (poi != null) {
                 detail.setPoiName(poi.getName());
@@ -88,6 +87,19 @@ public class RouteServiceImpl implements RouteService {
                 detail.setAddress(poi.getAddress());
                 detail.setLat(poi.getLat() != null ? poi.getLat().doubleValue() : null);
                 detail.setLng(poi.getLng() != null ? poi.getLng().doubleValue() : null);
+                detail.setAvoidTip(poi.getAvoidTip());
+                detail.setRestaurant(poi.getRestaurant());
+                detail.setBestVisitTime(poi.getBestVisitTime());
+                detail.setPhotoScore(poi.getPhotoScore());
+
+                // 解析照片 JSON 数组
+                if (poi.getPhotos() != null && !poi.getPhotos().isEmpty()) {
+                    try {
+                        detail.setPhotos(objectMapper.readValue(poi.getPhotos(), List.class));
+                    } catch (Exception e) {
+                        log.warn("解析 photos 失败：{}", poi.getPhotos());
+                    }
+                }
             }
             nodeDetails.add(detail);
         }
@@ -100,7 +112,7 @@ public class RouteServiceImpl implements RouteService {
     public boolean saveRoute(Long userId, Long routeId) {
         Route route = routeMapper.selectById(routeId);
         if (route == null) {
-            throw new RuntimeException("路线不存在");
+            throw new IllegalArgumentException("路线不存在");
         }
 
         Long count = userRouteMapper.selectCount(
@@ -109,7 +121,7 @@ public class RouteServiceImpl implements RouteService {
                         .eq(UserRoute::getRouteId, routeId)
         );
         if (count > 0) {
-            throw new RuntimeException("已收藏该路线");
+            throw new IllegalArgumentException("已收藏该路线");
         }
 
         UserRoute ur = new UserRoute();
@@ -140,11 +152,36 @@ public class RouteServiceImpl implements RouteService {
     }
 
     @Override
+    public List<Route> listMyPlans(Long userId) {
+        return routeMapper.selectList(
+                new LambdaQueryWrapper<Route>()
+                        .eq(Route::getUserId, userId)
+                        .eq(Route::getStatus, "saved")
+                        .orderByDesc(Route::getId)
+        );
+    }
+
+    @Override
+    @Transactional
+    public void deleteRoute(Long routeId, Long userId) {
+        Route route = routeMapper.selectById(routeId);
+        if (route == null) {
+            throw new IllegalArgumentException("路线不存在");
+        }
+        if (route.getUserId() == null || !route.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("无权删除该路线");
+        }
+        routeNodeMapper.delete(
+                new LambdaQueryWrapper<RouteNode>().eq(RouteNode::getRouteId, routeId)
+        );
+        routeMapper.deleteById(routeId);
+    }
+
+    @Override
     @Transactional
     public Long saveDraft(SaveDraftRequest request) {
         Long userId = UserContext.getUserId();
 
-        // 1. 幂等校验
         Route existing = routeMapper.selectOne(
                 new LambdaQueryWrapper<Route>()
                         .eq(Route::getUserId, userId)
@@ -158,7 +195,6 @@ public class RouteServiceImpl implements RouteService {
             return existing.getId();
         }
 
-        // 2. 保存 route
         Route route = new Route();
         route.setCityId(request.getCityId());
         route.setTitle(request.getTitle());
@@ -170,7 +206,6 @@ public class RouteServiceImpl implements RouteService {
         route.setUserId(userId);
         routeMapper.insert(route);
 
-        // 3. 保存 route_node
         for (SaveDraftRequest.Node node : request.getNodes()) {
             RouteNode rn = new RouteNode();
             rn.setRouteId(route.getId());
@@ -183,6 +218,7 @@ public class RouteServiceImpl implements RouteService {
 
         return route.getId();
     }
+
     @Override
     public OptimizeResponse optimizeDraft(OptimizeRequest request) {
         List<OptimizeRequest.Node> nodes = request.getNodes();
@@ -196,20 +232,15 @@ public class RouteServiceImpl implements RouteService {
             return response;
         }
 
-        // 1. 计算原始总距离
         double originalDistance = totalDistance(nodes);
 
-        // 2. 优化
         List<OptimizeRequest.Node> optimized;
         if (nodes.size() <= 6) {
-            // 暴力枚举（固定第一个点）
             optimized = bruteForceOptimize(nodes);
         } else {
-            // 贪心（固定第一个点）
             optimized = greedyOptimize(nodes);
         }
 
-        // 3. 计算优化后总距离
         double optimizedDistance = totalDistance(optimized);
 
         OptimizeResponse response = new OptimizeResponse();
@@ -220,9 +251,6 @@ public class RouteServiceImpl implements RouteService {
         return response;
     }
 
-    /**
-     * 计算一条路线的总距离
-     */
     private double totalDistance(List<OptimizeRequest.Node> nodes) {
         double total = 0;
         for (int i = 0; i < nodes.size() - 1; i++) {
@@ -234,9 +262,6 @@ public class RouteServiceImpl implements RouteService {
         return total;
     }
 
-    /**
-     * Haversine 公式：计算两点球面距离（km）
-     */
     private double haversine(double lat1, double lng1, double lat2, double lng2) {
         double R = 6371;
         double dLat = Math.toRadians(lat2 - lat1);
@@ -248,9 +273,6 @@ public class RouteServiceImpl implements RouteService {
         return R * c;
     }
 
-    /**
-     * 暴力枚举：固定第一个点，全排列其他点，选总距离最短的
-     */
     private List<OptimizeRequest.Node> bruteForceOptimize(List<OptimizeRequest.Node> nodes) {
         OptimizeRequest.Node first = nodes.get(0);
         List<OptimizeRequest.Node> rest = new ArrayList<>(nodes.subList(1, nodes.size()));
@@ -258,7 +280,6 @@ public class RouteServiceImpl implements RouteService {
         List<OptimizeRequest.Node> best = null;
         double bestDistance = Double.MAX_VALUE;
 
-        // 生成所有排列
         List<List<OptimizeRequest.Node>> permutations = new ArrayList<>();
         permute(rest, 0, permutations);
 
@@ -276,9 +297,6 @@ public class RouteServiceImpl implements RouteService {
         return best != null ? best : nodes;
     }
 
-    /**
-     * 生成所有排列（递归）
-     */
     private void permute(List<OptimizeRequest.Node> list, int start, List<List<OptimizeRequest.Node>> result) {
         if (start == list.size() - 1) {
             result.add(new ArrayList<>(list));
@@ -291,19 +309,14 @@ public class RouteServiceImpl implements RouteService {
         }
     }
 
-    /**
-     * 贪心算法：固定第一个点，每次选最近的未访问点
-     */
     private List<OptimizeRequest.Node> greedyOptimize(List<OptimizeRequest.Node> nodes) {
         List<OptimizeRequest.Node> result = new ArrayList<>();
         List<OptimizeRequest.Node> remaining = new ArrayList<>(nodes);
 
-        // 第一个点固定
         OptimizeRequest.Node current = remaining.remove(0);
         result.add(current);
 
         while (!remaining.isEmpty()) {
-            // 找离 current 最近的
             OptimizeRequest.Node nearest = null;
             double minDist = Double.MAX_VALUE;
             for (OptimizeRequest.Node node : remaining) {
@@ -322,31 +335,5 @@ public class RouteServiceImpl implements RouteService {
         }
 
         return result;
-    }
-    @Override
-    public List<Route> listMyPlans(Long userId) {
-        return routeMapper.selectList(
-                new LambdaQueryWrapper<Route>()
-                        .eq(Route::getUserId, userId)
-                        .eq(Route::getStatus, "saved")
-                        .orderByDesc(Route::getId)
-        );
-    }
-    @Override
-    @Transactional
-    public void deleteRoute(Long routeId, Long userId) {
-        Route route = routeMapper.selectById(routeId);
-        if (route == null) {
-            throw new IllegalArgumentException("路线不存在");
-        }
-        if (route.getUserId() == null || !route.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("无权删除该路线");
-        }
-        // 先删节点
-        routeNodeMapper.delete(
-                new LambdaQueryWrapper<RouteNode>().eq(RouteNode::getRouteId, routeId)
-        );
-        // 再删路线
-        routeMapper.deleteById(routeId);
     }
 }

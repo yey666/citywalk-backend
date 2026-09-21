@@ -44,4 +44,12 @@ public class Poi {
     private String description;
 
     private LocalDateTime createdAt;
+
+    private String avoidTip;
+
+    private String restaurant;
+
+    private String bestVisitTime;
+
+    private String photos;
 }

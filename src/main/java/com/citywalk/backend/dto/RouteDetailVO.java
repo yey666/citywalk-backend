@@ -28,5 +28,10 @@ public class RouteDetailVO {
         private Integer stayDuration;
         private String tip;
         private String photoSpot;
+        private String avoidTip;
+        private String restaurant;
+        private String bestVisitTime;
+        private Integer photoScore;
+        private List<String> photos;
     }
 }
