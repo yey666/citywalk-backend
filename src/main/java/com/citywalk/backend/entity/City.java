@@ -27,6 +27,10 @@ public class City {
 
     private String coverImage;
 
+    private String slogan;
+
+    private String intro;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

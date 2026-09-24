@@ -23,6 +23,7 @@ public class Route {
     private String status;
     private String coverImage;
     private String description;
+    private Integer isOfficial;
     private Long userId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
