@@ -3,6 +3,7 @@ package com.citywalk.backend.dto;
 import lombok.Data;
 
 import java.util.List;
+import java.util.Map;
 
 @Data
 public class RouteDetailVO {
@@ -15,6 +16,7 @@ public class RouteDetailVO {
     private String bestTime;
     private String description;
     private List<NodeDetail> nodes;
+    private List<TicketDetail> tickets;
 
     @Data
     public static class NodeDetail {
@@ -33,5 +35,16 @@ public class RouteDetailVO {
         private String bestVisitTime;
         private Integer photoScore;
         private List<String> photos;
+    }
+
+    @Data
+    public static class TicketDetail {
+        private String trainCode;
+        private String fromStation;
+        private String toStation;
+        private String startTime;
+        private String arriveTime;
+        private String travelDate;
+        private Map<String, String> prices;
     }
 }

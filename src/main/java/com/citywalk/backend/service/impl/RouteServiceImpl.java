@@ -8,10 +8,12 @@ import com.citywalk.backend.dto.SaveDraftRequest;
 import com.citywalk.backend.entity.Poi;
 import com.citywalk.backend.entity.Route;
 import com.citywalk.backend.entity.RouteNode;
+import com.citywalk.backend.entity.RouteTicket;
 import com.citywalk.backend.entity.UserRoute;
 import com.citywalk.backend.mapper.PoiMapper;
 import com.citywalk.backend.mapper.RouteMapper;
 import com.citywalk.backend.mapper.RouteNodeMapper;
+import com.citywalk.backend.mapper.RouteTicketMapper;
 import com.citywalk.backend.mapper.UserRouteMapper;
 import com.citywalk.backend.service.RouteService;
 import com.citywalk.backend.util.UserContext;
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -33,6 +36,7 @@ public class RouteServiceImpl implements RouteService {
 
     private final RouteMapper routeMapper;
     private final RouteNodeMapper routeNodeMapper;
+    private final RouteTicketMapper routeTicketMapper;
     private final PoiMapper poiMapper;
     private final UserRouteMapper userRouteMapper;
 
@@ -105,6 +109,32 @@ public class RouteServiceImpl implements RouteService {
         }
         vo.setNodes(nodeDetails);
 
+        List<RouteTicket> tickets = routeTicketMapper.selectList(
+                new LambdaQueryWrapper<RouteTicket>()
+                        .eq(RouteTicket::getRouteId, routeId)
+                        .orderByAsc(RouteTicket::getSortOrder)
+        );
+        List<RouteDetailVO.TicketDetail> ticketDetails = new ArrayList<>();
+        for (RouteTicket t : tickets) {
+            RouteDetailVO.TicketDetail td = new RouteDetailVO.TicketDetail();
+            td.setTrainCode(t.getTrainCode());
+            td.setFromStation(t.getFromStation());
+            td.setToStation(t.getToStation());
+            td.setStartTime(t.getStartTime());
+            td.setArriveTime(t.getArriveTime());
+            td.setTravelDate(t.getTravelDate());
+            if (t.getPricesJson() != null && !t.getPricesJson().isEmpty()) {
+                try {
+                    td.setPrices(objectMapper.readValue(t.getPricesJson(), Map.class));
+                } catch (Exception e) {
+                    log.warn("解析 prices 失败：{}", t.getPricesJson());
+                    td.setPrices(Collections.emptyMap());
+                }
+            }
+            ticketDetails.add(td);
+        }
+        vo.setTickets(ticketDetails);
+
         return vo;
     }
 
@@ -174,6 +204,9 @@ public class RouteServiceImpl implements RouteService {
         routeNodeMapper.delete(
                 new LambdaQueryWrapper<RouteNode>().eq(RouteNode::getRouteId, routeId)
         );
+        routeTicketMapper.delete(
+                new LambdaQueryWrapper<RouteTicket>().eq(RouteTicket::getRouteId, routeId)
+        );
         routeMapper.deleteById(routeId);
     }
 
@@ -182,38 +215,85 @@ public class RouteServiceImpl implements RouteService {
     public Long saveDraft(SaveDraftRequest request) {
         Long userId = UserContext.getUserId();
 
-        Route existing = routeMapper.selectOne(
-                new LambdaQueryWrapper<Route>()
-                        .eq(Route::getUserId, userId)
-                        .eq(Route::getCityId, request.getCityId())
-                        .eq(Route::getStatus, "saved")
-                        .eq(Route::getTitle, request.getTitle())
-                        .orderByDesc(Route::getId)
-                        .last("LIMIT 1")
-        );
-        if (existing != null) {
-            return existing.getId();
+        Route route;
+        if (request.getRouteId() != null) {
+            // 按 routeId 更新：彻底替换节点和车次
+            route = routeMapper.selectById(request.getRouteId());
+            if (route == null || route.getUserId() == null || !route.getUserId().equals(userId)) {
+                throw new IllegalArgumentException("无权修改该计划");
+            }
+            route.setCityId(request.getCityId());
+            route.setTitle(request.getTitle());
+            route.setTheme(request.getTheme());
+            route.setDuration(request.getDuration());
+            route.setDifficulty(request.getDifficulty());
+            routeMapper.updateById(route);
+            routeNodeMapper.delete(new LambdaQueryWrapper<RouteNode>().eq(RouteNode::getRouteId, route.getId()));
+            routeTicketMapper.delete(new LambdaQueryWrapper<RouteTicket>().eq(RouteTicket::getRouteId, route.getId()));
+        } else {
+            // 无 routeId：按（用户+城市+标题）找已保存计划，命中则更新，否则新建
+            Route existing = routeMapper.selectOne(
+                    new LambdaQueryWrapper<Route>()
+                            .eq(Route::getUserId, userId)
+                            .eq(Route::getCityId, request.getCityId())
+                            .eq(Route::getStatus, "saved")
+                            .eq(Route::getTitle, request.getTitle())
+                            .orderByDesc(Route::getId)
+                            .last("LIMIT 1")
+            );
+            if (existing != null) {
+                route = existing;
+                route.setTheme(request.getTheme());
+                route.setDuration(request.getDuration());
+                route.setDifficulty(request.getDifficulty());
+                routeMapper.updateById(route);
+                routeNodeMapper.delete(new LambdaQueryWrapper<RouteNode>().eq(RouteNode::getRouteId, route.getId()));
+                routeTicketMapper.delete(new LambdaQueryWrapper<RouteTicket>().eq(RouteTicket::getRouteId, route.getId()));
+            } else {
+                route = new Route();
+                route.setCityId(request.getCityId());
+                route.setTitle(request.getTitle());
+                route.setTheme(request.getTheme());
+                route.setDuration(request.getDuration());
+                route.setDifficulty(request.getDifficulty());
+                route.setStatus("saved");
+                route.setAiGenerated(0);
+                route.setUserId(userId);
+                routeMapper.insert(route);
+            }
         }
 
-        Route route = new Route();
-        route.setCityId(request.getCityId());
-        route.setTitle(request.getTitle());
-        route.setTheme(request.getTheme());
-        route.setDuration(request.getDuration());
-        route.setDifficulty(request.getDifficulty());
-        route.setStatus("saved");
-        route.setAiGenerated(0);
-        route.setUserId(userId);
-        routeMapper.insert(route);
+        if (request.getNodes() != null) {
+            for (SaveDraftRequest.Node node : request.getNodes()) {
+                RouteNode rn = new RouteNode();
+                rn.setRouteId(route.getId());
+                rn.setPoiId(node.getPoiId());
+                rn.setSortOrder(node.getSortOrder());
+                rn.setStayDuration(node.getStayDuration());
+                rn.setTip(node.getTip());
+                routeNodeMapper.insert(rn);
+            }
+        }
 
-        for (SaveDraftRequest.Node node : request.getNodes()) {
-            RouteNode rn = new RouteNode();
-            rn.setRouteId(route.getId());
-            rn.setPoiId(node.getPoiId());
-            rn.setSortOrder(node.getSortOrder());
-            rn.setStayDuration(node.getStayDuration());
-            rn.setTip(node.getTip());
-            routeNodeMapper.insert(rn);
+        if (request.getTickets() != null) {
+            int order = 0;
+            for (SaveDraftRequest.Ticket ticket : request.getTickets()) {
+                RouteTicket rt = new RouteTicket();
+                rt.setRouteId(route.getId());
+                rt.setTrainCode(ticket.getTrainCode());
+                rt.setFromStation(ticket.getFromStation());
+                rt.setToStation(ticket.getToStation());
+                rt.setStartTime(ticket.getStartTime());
+                rt.setArriveTime(ticket.getArriveTime());
+                rt.setTravelDate(ticket.getTravelDate());
+                try {
+                    rt.setPricesJson(ticket.getPrices() == null ? "{}" : objectMapper.writeValueAsString(ticket.getPrices()));
+                } catch (Exception e) {
+                    rt.setPricesJson("{}");
+                }
+                rt.setSortOrder(order++);
+                routeTicketMapper.insert(rt);
+            }
         }
 
         return route.getId();

@@ -125,3 +125,20 @@ INSERT INTO city (name, region, lat, lng, description) VALUES
                                                            ('西安', '西北', 34.341568, 108.940174, '西安，十三朝古都。城墙、钟楼、回民街、大唐不夜城，历史与现代交织。'),
                                                            ('杭州', '华东', 30.274084, 120.155070, '杭州，一半山水一半城。西湖、龙井村、南宋御街，适合慢走的诗意路线。'),
                                                            ('厦门', '华南', 24.479834, 118.089425, '厦门，海岛城市。鼓浪屿、沙坡尾、环岛路，文艺与海风并存。');
+-- ============================================================
+-- 7. 计划绑定车次表
+-- ============================================================
+CREATE TABLE IF NOT EXISTS route_ticket (
+    id           BIGINT PRIMARY KEY AUTO_INCREMENT,
+    route_id     BIGINT NOT NULL COMMENT '所属计划 route.id',
+    train_code   VARCHAR(50)  COMMENT '车次号，如 G1556',
+    from_station VARCHAR(100) COMMENT '出发站',
+    to_station   VARCHAR(100) COMMENT '到达站',
+    start_time   VARCHAR(10)  COMMENT '出发时间 HH:mm',
+    arrive_time  VARCHAR(10)  COMMENT '到达时间 HH:mm',
+    travel_date  VARCHAR(10)  COMMENT '乘车日期 YYYY-MM-DD',
+    prices_json  TEXT         COMMENT '各席别价格 JSON，如 {"二等座":"15.0"}',
+    sort_order   INT DEFAULT 0 COMMENT '车次顺序',
+    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_route_ticket (route_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='计划绑定的车次';
