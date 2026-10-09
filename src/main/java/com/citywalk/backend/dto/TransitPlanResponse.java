@@ -28,5 +28,8 @@ public class TransitPlanResponse {
         private String departureStop; // 上车站
         private String arrivalStop;   // 下车站
         private Integer stopCount;    // 站数
+        private String transportType; // "bus" / "metro"（仅公交段）
+        private String startTime;     // 首班运营时间
+        private String endTime;       // 末班运营时间
     }
 }

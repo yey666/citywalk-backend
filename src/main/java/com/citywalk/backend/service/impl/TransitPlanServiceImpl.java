@@ -138,6 +138,10 @@ public class TransitPlanServiceImpl implements TransitPlanService {
                         step.setDepartureStop(line.path("departure_stop").path("name").asText());
                         step.setArrivalStop(line.path("arrival_stop").path("name").asText());
                         step.setDistance(line.path("distance").asText());
+                        step.setStopCount(parseInt(line.path("via_num")));
+                        step.setTransportType(resolveTransportType(line.path("type").asText()));
+                        step.setStartTime(line.path("start_time").asText());
+                        step.setEndTime(line.path("end_time").asText());
                         steps.add(step);
                     }
                 }
@@ -146,5 +150,21 @@ public class TransitPlanServiceImpl implements TransitPlanService {
         }
 
         return item;
+    }
+
+    private Integer parseInt(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) return null;
+        String s = node.asText().trim();
+        if (s.isEmpty()) return null;
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private String resolveTransportType(String type) {
+        if (type == null || type.isEmpty()) return "bus";
+        return type.contains("地铁") ? "metro" : "bus";
     }
 }
