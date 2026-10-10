@@ -117,6 +117,7 @@ public class RouteServiceImpl implements RouteService {
         List<RouteDetailVO.TicketDetail> ticketDetails = new ArrayList<>();
         for (RouteTicket t : tickets) {
             RouteDetailVO.TicketDetail td = new RouteDetailVO.TicketDetail();
+            td.setId(t.getId());
             td.setTrainCode(t.getTrainCode());
             td.setFromStation(t.getFromStation());
             td.setToStation(t.getToStation());
@@ -208,6 +209,23 @@ public class RouteServiceImpl implements RouteService {
                 new LambdaQueryWrapper<RouteTicket>().eq(RouteTicket::getRouteId, routeId)
         );
         routeMapper.deleteById(routeId);
+    }
+
+    @Override
+    @Transactional
+    public void deleteTicket(Long routeId, Long ticketId) {
+        Route route = routeMapper.selectById(routeId);
+        if (route == null) {
+            throw new IllegalArgumentException("路线不存在");
+        }
+        if (route.getUserId() == null || !route.getUserId().equals(UserContext.getUserId())) {
+            throw new IllegalArgumentException("无权删除该车次");
+        }
+        routeTicketMapper.delete(
+                new LambdaQueryWrapper<RouteTicket>()
+                        .eq(RouteTicket::getId, ticketId)
+                        .eq(RouteTicket::getRouteId, routeId)
+        );
     }
 
     @Override

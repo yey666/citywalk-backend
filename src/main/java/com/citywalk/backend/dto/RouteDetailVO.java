@@ -39,6 +39,7 @@ public class RouteDetailVO {
 
     @Data
     public static class TicketDetail {
+        private Long id;
         private String trainCode;
         private String fromStation;
         private String toStation;

@@ -28,5 +28,6 @@ public interface RouteService {
     List<Route> listByUser(Long userId);
     List<Route> listMyPlans(Long userId);
     void deleteRoute(Long routeId, Long userId);
+    void deleteTicket(Long routeId, Long ticketId);
 
 }

@@ -92,5 +92,13 @@ public class RouteController {
         result.put("success", true);
         return result;
     }
+    @Operation(summary = "删除计划里的一条车次")
+    @DeleteMapping("/route/{routeId}/tickets/{ticketId}")
+    public Map<String, Object> deleteTicket(@PathVariable Long routeId, @PathVariable Long ticketId) {
+        routeService.deleteTicket(routeId, ticketId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        return result;
+    }
 
 }
