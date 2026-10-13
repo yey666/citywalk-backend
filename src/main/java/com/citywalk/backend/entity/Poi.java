@@ -52,4 +52,6 @@ public class Poi {
     private String bestVisitTime;
 
     private String photos;
+
+    private String amapId;
 }

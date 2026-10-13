@@ -4,12 +4,16 @@ import com.citywalk.backend.config.AmapConfig;
 import com.citywalk.backend.dto.AmapPoiResponse;
 import com.citywalk.backend.entity.Poi;
 import com.citywalk.backend.mapper.PoiMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,6 +25,7 @@ public class AmapPoiFetcher {
     private final AmapConfig amapConfig;
     private final PoiMapper poiMapper;
     private final RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     // 要拉取的类别
     private static final String[] TYPES = {
@@ -107,6 +112,7 @@ public class AmapPoiFetcher {
                 Poi poi = new Poi();
                 poi.setCityId(cityId);
                 poi.setName(item.getName());
+                poi.setAmapId(item.getId());
                 poi.setCategory(item.getType() != null && item.getType().contains(";")
                         ? item.getType().split(";")[0]
                         : item.getType());
@@ -119,6 +125,10 @@ public class AmapPoiFetcher {
                 poi.setCultureScore(3);
                 poi.setPriceLevel(0);
                 poi.setDescription("");
+                poi.setOpenHours(item.getOpentime2());
+                if (item.getPhotos() != null && !item.getPhotos().isEmpty()) {
+                    poi.setPhotos(objectMapper.writeValueAsString(item.getPhotos()));
+                }
 
                 result.add(poi);
             } catch (Exception e) {
@@ -127,5 +137,155 @@ public class AmapPoiFetcher {
         }
 
         return result;
+    }
+
+    /**
+     * 调试用：返回高德原始响应中的第一条 POI（含 photos/biz_ext/tag/business_area/opentime 等未建模字段）
+     */
+    public JsonNode fetchFirstPoiRaw() {
+        String url = amapConfig.getBaseUrl() + "/v3/place/text"
+                + "?key=" + amapConfig.getKey()
+                + "&types=" + TYPES[0]
+                + "&city=" + FOSHAN_ADCODE
+                + "&citylimit=true"
+                + "&offset=25&page=1&extensions=all";
+
+        log.info("===== 调试请求 URL: {}", url);
+
+        String raw = restTemplate.getForObject(url, String.class);
+        if (raw == null) {
+            log.warn("===== 高德原始响应为空");
+            return null;
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(raw);
+            JsonNode pois = root.path("pois");
+            if (!pois.isArray() || pois.isEmpty()) {
+                log.warn("===== 高德返回无 POI 数据, raw={}", raw);
+                return null;
+            }
+            return pois.get(0);
+        } catch (Exception e) {
+            log.error("===== 解析高德原始响应失败, raw={}", raw, e);
+            return null;
+        }
+    }
+
+    /**
+     * 回填高德 POI ID：按 lng/lat + name 用 place/around 匹配（每次最多 20 条）
+     */
+    public int backfillAmapId(Long cityId) {
+        List<Poi> pois = poiMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Poi>()
+                        .eq(Poi::getCityId, cityId)
+                        .isNull(Poi::getAmapId)
+                        .orderByAsc(Poi::getId)
+                        .last("limit 20")
+        );
+
+        System.out.println("backfill 查到 " + pois.size() + " 条, cityId=" + cityId);
+
+        int updated = 0;
+        for (Poi poi : pois) {
+            try {
+                if (poi.getLng() == null || poi.getLat() == null) {
+                    log.warn("===== backfill 无坐标，跳过: name={}", poi.getName());
+                    continue;
+                }
+                String location = poi.getLng() + "," + poi.getLat();
+                String url = amapConfig.getBaseUrl() + "/v3/place/around"
+                        + "?key=" + amapConfig.getKey()
+                        + "&location=" + location
+                        + "&radius=500"
+                        + "&keywords=" + URLEncoder.encode(poi.getName(), StandardCharsets.UTF_8)
+                        + "&offset=1&page=1&extensions=all";
+
+                System.out.println("backfill URL: " + url);
+
+                String raw = restTemplate.getForObject(url, String.class);
+                System.out.println("backfill raw: " + raw);
+                AmapPoiResponse response = objectMapper.readValue(raw, AmapPoiResponse.class);
+                if (response == null || !"1".equals(response.getStatus())
+                        || response.getPois() == null || response.getPois().isEmpty()) {
+                    log.warn("===== backfill 未命中: name={}", poi.getName());
+                    System.out.println("backfill 未命中详情: name=" + poi.getName()
+                            + ", status=" + (response != null ? response.getStatus() : "null")
+                            + ", pois=" + (response != null && response.getPois() != null ? response.getPois().size() : "null")
+                            + ", info=" + (response != null ? response.getInfo() : "null"));
+                    continue;
+                }
+
+                AmapPoiResponse.PoiItem item = response.getPois().get(0);
+
+                Poi update = new Poi();
+                update.setId(poi.getId());
+                update.setAmapId(item.getId());
+                if (item.getPhotos() != null && !item.getPhotos().isEmpty()) {
+                    update.setPhotos(objectMapper.writeValueAsString(item.getPhotos()));
+                }
+                poiMapper.updateById(update);
+                updated++;
+
+                System.out.println("backfill name=" + poi.getName() + " amapId=" + item.getId());
+
+                Thread.sleep(400);
+            } catch (Exception e) {
+                log.error("===== backfill 失败: name={}", poi.getName(), e);
+            }
+        }
+        System.out.println("backfill 完成, updated=" + updated);
+        return updated;
+    }
+
+    /**
+     * 补数据：按高德 POI ID 用 place/detail 精确查询，回填 photos（每次最多 20 条）
+     */
+    public int refreshPhotos(Long cityId) {
+        List<Poi> pois = poiMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Poi>()
+                        .eq(Poi::getCityId, cityId)
+                        .isNotNull(Poi::getAmapId)
+                        .isNull(Poi::getPhotos)
+                        .orderByAsc(Poi::getId)
+                        .last("limit 20")
+        );
+
+        System.out.println("refreshPhotos 查到 " + pois.size() + " 条, cityId=" + cityId);
+
+        int updated = 0;
+        for (Poi poi : pois) {
+            try {
+                String url = amapConfig.getBaseUrl() + "/v3/place/detail"
+                        + "?id=" + poi.getAmapId()
+                        + "&key=" + amapConfig.getKey()
+                        + "&extensions=all";
+
+                AmapPoiResponse response = restTemplate.getForObject(url, AmapPoiResponse.class);
+                if (response == null || !"1".equals(response.getStatus())
+                        || response.getPois() == null || response.getPois().isEmpty()) {
+                    log.warn("===== refresh-photos 未命中: name={}", poi.getName());
+                    continue;
+                }
+
+                AmapPoiResponse.PoiItem item = response.getPois().get(0);
+
+                if (item.getPhotos() != null && !item.getPhotos().isEmpty()) {
+                    Poi update = new Poi();
+                    update.setId(poi.getId());
+                    update.setPhotos(objectMapper.writeValueAsString(item.getPhotos()));
+                    poiMapper.updateById(update);
+                    updated++;
+                    log.info("===== refresh-photos 更新: name={}, photos={}",
+                            poi.getName(), item.getPhotos().size());
+                }
+
+                Thread.sleep(400);
+            } catch (Exception e) {
+                log.error("===== refresh-photos 失败: name={}", poi.getName(), e);
+            }
+        }
+        System.out.println("refreshPhotos 完成, updated=" + updated);
+        return updated;
     }
 }

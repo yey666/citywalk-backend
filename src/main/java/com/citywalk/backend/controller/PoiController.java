@@ -24,10 +24,33 @@ public class PoiController {
 
     @Operation(summary = "拉取 POI 数据")
     @GetMapping("/fetch")
-    public Map<String, Object> fetch(@RequestParam Long cityId) {
-        int success = amapPoiFetcher.fetchFoshanPois(cityId);
+    public Map<String, Object> fetch(@RequestParam Long cityId,
+                                     @RequestParam(defaultValue = "0") Integer debug) {
         Map<String, Object> result = new HashMap<>();
+        if (debug != null && debug == 1) {
+            result.put("debug", amapPoiFetcher.fetchFirstPoiRaw());
+            return result;
+        }
+        int success = amapPoiFetcher.fetchFoshanPois(cityId);
         result.put("success", success);
+        return result;
+    }
+
+    @Operation(summary = "补数据：回填 photos / openHours（每次最多 20 条）")
+    @PostMapping("/refresh-photos")
+    public Map<String, Object> refreshPhotos(@RequestParam Long cityId) {
+        int updated = amapPoiFetcher.refreshPhotos(cityId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("updated", updated);
+        return result;
+    }
+
+    @Operation(summary = "回填高德 POI ID（每次最多 20 条）")
+    @GetMapping("/backfill-amap-id")
+    public Map<String, Object> backfillAmapId(@RequestParam Long cityId) {
+        int updated = amapPoiFetcher.backfillAmapId(cityId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("updated", updated);
         return result;
     }
 
