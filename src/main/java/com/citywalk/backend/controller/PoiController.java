@@ -1,6 +1,7 @@
 package com.citywalk.backend.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.citywalk.backend.dto.PoiBriefVO;
 import com.citywalk.backend.entity.Poi;
 import com.citywalk.backend.mapper.PoiMapper;
 import com.citywalk.backend.util.AmapPoiFetcher;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Tag(name = "POI", description = "POI 数据拉取")
 @RestController
@@ -60,5 +62,19 @@ public class PoiController {
         return poiMapper.selectList(
                 new LambdaQueryWrapper<Poi>().eq(Poi::getCityId, cityId)
         );
+    }
+
+    @Operation(summary = "按关键字搜索 POI（发帖关联用）")
+    @GetMapping("/search")
+    public List<PoiBriefVO> search(@RequestParam String keyword) {
+        return poiMapper.selectList(
+                new LambdaQueryWrapper<Poi>().like(Poi::getName, keyword)
+        ).stream().map(poi -> {
+            PoiBriefVO vo = new PoiBriefVO();
+            vo.setId(poi.getId());
+            vo.setName(poi.getName());
+            vo.setCityId(poi.getCityId());
+            return vo;
+        }).collect(Collectors.toList());
     }
 }
