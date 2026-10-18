@@ -84,22 +84,30 @@ AI 优化路线，保存后查票，出发前社区看真实反馈。
 
 ```bash
 docker run -d --name redis-citywalk -p 6379:6379 redis/redis-stack-server:7.2.0-v6
-启动 MCP Server 12306：
+```
 
-bash
+2. 启动 MCP Server 12306：
+
+```bash
 docker run -d -p 8000:8000 --name mcp-12306 drfccv/mcp-server-12306:latest
-初始化数据库：
+```
 
-sql
-CREATE DATABASE citywalk DEFAULT CHARACTER SET utf8mb4;
-然后执行 docs/database.sql 和 docs/community.sql。
+3. 初始化数据库（详细顺序见 docs/DEPLOYMENT.md）：
 
-配置 application.yaml：填入 MySQL、高德、硅基流动、DeepSeek、JWT secret。
+```bash
+mysql -u root -p < docs/database.sql
+mysql -u root -p citywalk < docs/community.sql
+mysql -u root -p citywalk < docs/migration-create-all-missing-tables.sql
+```
 
-启动：
+4. 配置 application.yaml：填入 MySQL、高德、硅基流动、DeepSeek、JWT secret。
 
-bash
+5. 启动：
+
+```bash
 mvn spring-boot:run
+```
+
 接口文档：http://localhost:8080/doc.html
 
 项目结构
