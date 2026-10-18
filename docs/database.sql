@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS city (
     lng DECIMAL(10, 6) NOT NULL COMMENT '经度',
     description TEXT COMMENT '城市解说',
     cover_image VARCHAR(255) COMMENT '封面图',
+    slogan VARCHAR(255) COMMENT '一句话标语',
+    intro TEXT COMMENT '城市介绍',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='城市表';
@@ -47,6 +49,10 @@ CREATE TABLE IF NOT EXISTS poi (
     best_visit_time VARCHAR(50) COMMENT '最佳到访时段',
     avoid_time VARCHAR(50) COMMENT '避开时段',
     source VARCHAR(50) DEFAULT 'amap' COMMENT '数据来源',
+    amap_id VARCHAR(64) COMMENT '高德 POI ID',
+    photos TEXT COMMENT '照片 JSON 数组',
+    restaurant VARCHAR(500) COMMENT '推荐餐厅/美食',
+    avoid_tip VARCHAR(500) COMMENT '避开时段提示',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_city (city_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='POI 表';
@@ -63,6 +69,7 @@ CREATE TABLE IF NOT EXISTS route (
     difficulty VARCHAR(20) COMMENT '轻松/中等/暴走',
     best_time VARCHAR(20) COMMENT '上午/下午/傍晚/夜游',
     status VARCHAR(20) DEFAULT 'draft' COMMENT 'draft/saved/shared/official',
+    is_official TINYINT DEFAULT 0 COMMENT '是否官方 0/1',
     cover_image VARCHAR(255),
     description TEXT COMMENT '路线简介',
     user_id BIGINT COMMENT '创建者（官方为 NULL）',
