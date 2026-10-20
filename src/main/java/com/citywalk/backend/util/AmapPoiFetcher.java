@@ -27,11 +27,15 @@ public class AmapPoiFetcher {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    // 要拉取的类别
+    // 要拉取的景点类别（注意：高德编码 05=餐饮服务，14=科教文化服务；此前 140000 被误标为“餐饮服务”，实际拉的是文化广场/宗祠）
     private static final String[] TYPES = {
             "110100",   // 风景名胜
             "110200",   // 公园广场
-            "140000",   // 餐饮服务
+    };
+
+    // 餐饮服务类别（美食主题专用，单独拉取）
+    private static final String[] FOOD_TYPES = {
+            "050000",   // 餐饮服务
     };
 
     // 佛山 adcode
@@ -47,19 +51,7 @@ public class AmapPoiFetcher {
                 log.info("===== 开始拉取类别: {}", type);
                 List<Poi> pois = fetchByType(type, cityId);
                 log.info("===== 类别 {} 解析出 {} 个 POI", type, pois.size());
-
-                for (Poi poi : pois) {
-                    // 去重
-                    Long count = poiMapper.selectCount(
-                            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Poi>()
-                                    .eq(Poi::getCityId, cityId)
-                                    .eq(Poi::getName, poi.getName())
-                    );
-                    if (count == 0) {
-                        poiMapper.insert(poi);
-                        total++;
-                    }
-                }
+                total += savePois(pois, cityId);
                 log.info("===== 类别 {} 完成，累计入库 {} 条", type, total);
                 Thread.sleep(500);
             } catch (Exception e) {
@@ -67,6 +59,42 @@ public class AmapPoiFetcher {
             }
         }
         return total;
+    }
+
+    /**
+     * 专门拉取「餐饮服务」类别的 POI（美食主题数据源）
+     */
+    public int fetchFoodPois(Long cityId) {
+        int total = 0;
+        for (String type : FOOD_TYPES) {
+            try {
+                log.info("===== 开始拉取餐饮类别: {}", type);
+                List<Poi> pois = fetchByType(type, cityId);
+                log.info("===== 餐饮类别 {} 解析出 {} 个 POI", type, pois.size());
+                total += savePois(pois, cityId);
+                Thread.sleep(500);
+            } catch (Exception e) {
+                log.error("===== 拉取餐饮类别 {} 失败", type, e);
+            }
+        }
+        return total;
+    }
+
+    /** 去重入库（by cityId + name） */
+    private int savePois(List<Poi> pois, Long cityId) {
+        int saved = 0;
+        for (Poi poi : pois) {
+            Long count = poiMapper.selectCount(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Poi>()
+                            .eq(Poi::getCityId, cityId)
+                            .eq(Poi::getName, poi.getName())
+            );
+            if (count == 0) {
+                poiMapper.insert(poi);
+                saved++;
+            }
+        }
+        return saved;
     }
 
     /**
@@ -113,9 +141,10 @@ public class AmapPoiFetcher {
                 poi.setCityId(cityId);
                 poi.setName(item.getName());
                 poi.setAmapId(item.getId());
-                poi.setCategory(item.getType() != null && item.getType().contains(";")
+                String rawType = item.getType() != null && item.getType().contains(";")
                         ? item.getType().split(";")[0]
-                        : item.getType());
+                        : item.getType();
+                poi.setCategory(mapCategory(rawType));
                 poi.setAddress(item.getAddress());
                 poi.setLng(new BigDecimal(lngLat[0].trim()));
                 poi.setLat(new BigDecimal(lngLat[1].trim()));
@@ -137,6 +166,27 @@ public class AmapPoiFetcher {
         }
 
         return result;
+    }
+
+    /**
+     * 把高德 6 位类型码映射成中文大类名（提升语义检索与前端展示效果）
+     */
+    private String mapCategory(String typeCode) {
+        if (typeCode == null || typeCode.length() < 2) {
+            return typeCode;
+        }
+        switch (typeCode.substring(0, 2)) {
+            case "05": return "餐饮服务";
+            case "06": return "购物服务";
+            case "07": return "生活服务";
+            case "08": return "体育休闲";
+            case "10": return "住宿服务";
+            case "11": return "风景名胜";
+            case "12": return "商务住宅";
+            case "14": return "科教文化";
+            case "15": return "交通设施";
+            default: return typeCode;
+        }
     }
 
     /**

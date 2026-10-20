@@ -2,7 +2,9 @@ package com.citywalk.backend.service.impl;
 
 import com.citywalk.backend.dto.RouteGenerateRequest;
 import com.citywalk.backend.dto.RouteGenerateResponse;
+import com.citywalk.backend.entity.City;
 import com.citywalk.backend.entity.Poi;
+import com.citywalk.backend.mapper.CityMapper;
 import com.citywalk.backend.mapper.PoiMapper;
 import com.citywalk.backend.service.RouteGenerateService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -28,29 +30,34 @@ public class RouteGenerateServiceImpl implements RouteGenerateService {
 
     private final VectorStore vectorStore;
     private final PoiMapper poiMapper;
+    private final CityMapper cityMapper;
     private final ChatModel chatModel;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public RouteGenerateResponse generate(RouteGenerateRequest request) {
+        // 0. 查城市名（用于 Prompt 与向量过滤）
+        City city = request.getCityId() != null ? cityMapper.selectById(request.getCityId()) : null;
+        String cityName = city != null ? city.getName() : "目标城市";
+
         // 1. 拼接检索文本
         String query = request.getTheme() + " " +
                 request.getDifficulty() + " " +
                 request.getDuration() + "小时";
 
-        log.info("检索文本：{}", query);
+        log.info("检索文本：{}（城市：{} / id={}）", query, cityName, request.getCityId());
 
-        // 2. 向量检索 Top 10 POI
+        // 2. 向量检索 Top 30 候选（城市过滤放到第 5 步按实体 cityId 做，向量元数据不可靠）
         List<Document> docs = vectorStore.similaritySearch(
                 SearchRequest.builder()
                         .query(query)
-                        .topK(10)
+                        .topK(30)
                         .build()
         );
 
         if (docs.isEmpty()) {
-            throw new RuntimeException("未找到相关 POI");
+            throw new RuntimeException("未找到相关 POI（请先初始化向量库）");
         }
 
         // 3. 诊断日志：打印每个文档的完整 metadata
@@ -89,12 +96,21 @@ public class RouteGenerateServiceImpl implements RouteGenerateService {
         List<Poi> pois = poiMapper.selectBatchIds(poiIds);
         log.info("从数据库查到 {} 个 POI", pois.size());
 
-        if (pois.isEmpty()) {
-            throw new RuntimeException("数据库中找不到对应的 POI");
+        // 5.1 按 cityId 过滤，避免跨城市（向量检索是全量候选，用数据库实体字段过滤才可靠）
+        if (request.getCityId() != null) {
+            pois = pois.stream()
+                    .filter(p -> p.getCityId() != null && p.getCityId().equals(request.getCityId()))
+                    .limit(10)
+                    .collect(Collectors.toList());
+            log.info("按 cityId={} 过滤后剩 {} 个 POI", request.getCityId(), pois.size());
         }
 
-        // 6. 构建 Prompt
-        String prompt = buildPrompt(request, pois);
+        if (pois.isEmpty()) {
+            throw new RuntimeException("数据库中找不到对应城市的 POI");
+        }
+
+        // 6. 构建 Prompt（动态城市名）
+        String prompt = buildPrompt(request, pois, cityName);
 
         // 7. 调 DeepSeek 生成路线
         String aiResponse = ChatClient.builder(chatModel)
@@ -114,7 +130,7 @@ public class RouteGenerateServiceImpl implements RouteGenerateService {
         return response;
     }
 
-    private String buildPrompt(RouteGenerateRequest request, List<Poi> pois) {
+    private String buildPrompt(RouteGenerateRequest request, List<Poi> pois, String cityName) {
         StringBuilder poiList = new StringBuilder();
         for (Poi poi : pois) {
             poiList.append(String.format("- id=%d, 名称=%s, 类别=%s, 地址=%s\n",
@@ -122,7 +138,7 @@ public class RouteGenerateServiceImpl implements RouteGenerateService {
         }
 
         return String.format("""
-                你是苏州 Citywalk 路线规划助手。
+                你是%s Citywalk 路线规划助手。
                 
                 用户需求：
                 - 时长：%d 小时
@@ -136,9 +152,10 @@ public class RouteGenerateServiceImpl implements RouteGenerateService {
                 
                 约束：
                 1. 只能从给定的 POI 列表中选择，不要编造新的 POI
-                2. 每个 POI 的停留时间 30-120 分钟
-                3. 总时长控制在 %d 小时左右
-                4. 返回严格的 JSON 格式，不要 markdown 代码块：
+                2. 本次主题是【%s】，请优先选择与主题最匹配的 POI（美食选餐饮、历史选古迹、出片选景观）
+                3. 每个 POI 的停留时间 30-120 分钟
+                4. 总时长控制在 %d 小时左右
+                5. 返回严格的 JSON 格式，不要 markdown 代码块：
                 
                 {
                   "title": "路线标题",
@@ -154,10 +171,12 @@ public class RouteGenerateServiceImpl implements RouteGenerateService {
                   ]
                 }
                 """,
+                cityName,
                 request.getDuration(),
                 request.getTheme(),
                 request.getDifficulty(),
                 poiList.toString(),
+                request.getTheme(),
                 request.getDuration()
         );
     }

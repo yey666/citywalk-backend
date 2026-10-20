@@ -26,6 +26,9 @@ public class EmbeddingConfig {
     @Value("${citywalk.embedding.model}")
     private String model;
 
+    @Value("${citywalk.embedding.dimensions:1024}")
+    private int embeddingDimension;
+
     @Bean
     public EmbeddingModel embeddingModel() {
         OpenAiApi openAiApi = OpenAiApi.builder()
@@ -37,7 +40,15 @@ public class EmbeddingConfig {
                 .model(model)
                 .build();
 
-        return new OpenAiEmbeddingModel(openAiApi, MetadataMode.EMBED, options);
+        // bge-m3 固定 1024 维。覆盖 dimensions() 直接返回，避免 Spring AI 为探测维度
+        // 额外发起一次 embed("Hello World") 调用（免费额度/限流场景下，这次多余请求
+        // 可能触发限流，导致 init-poi-vectors 报 EmbeddingList 解析错误）。
+        return new OpenAiEmbeddingModel(openAiApi, MetadataMode.EMBED, options) {
+            @Override
+            public int dimensions() {
+                return EmbeddingConfig.this.embeddingDimension;
+            }
+        };
     }
 
     @Bean

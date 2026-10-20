@@ -12,6 +12,7 @@ public class SaveDraftRequest {
     private String theme;
     private Integer duration;
     private String difficulty;
+    private Integer aiGenerated;
     private Long routeId;
     private List<Node> nodes;
     private List<Ticket> tickets;

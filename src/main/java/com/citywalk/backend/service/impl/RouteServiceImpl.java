@@ -245,6 +245,7 @@ public class RouteServiceImpl implements RouteService {
             route.setTheme(request.getTheme());
             route.setDuration(request.getDuration());
             route.setDifficulty(request.getDifficulty());
+            route.setAiGenerated(request.getAiGenerated() != null ? request.getAiGenerated() : route.getAiGenerated());
             routeMapper.updateById(route);
             routeNodeMapper.delete(new LambdaQueryWrapper<RouteNode>().eq(RouteNode::getRouteId, route.getId()));
             routeTicketMapper.delete(new LambdaQueryWrapper<RouteTicket>().eq(RouteTicket::getRouteId, route.getId()));
@@ -264,6 +265,7 @@ public class RouteServiceImpl implements RouteService {
                 route.setTheme(request.getTheme());
                 route.setDuration(request.getDuration());
                 route.setDifficulty(request.getDifficulty());
+                route.setAiGenerated(request.getAiGenerated() != null ? request.getAiGenerated() : route.getAiGenerated());
                 routeMapper.updateById(route);
                 routeNodeMapper.delete(new LambdaQueryWrapper<RouteNode>().eq(RouteNode::getRouteId, route.getId()));
                 routeTicketMapper.delete(new LambdaQueryWrapper<RouteTicket>().eq(RouteTicket::getRouteId, route.getId()));
@@ -275,7 +277,7 @@ public class RouteServiceImpl implements RouteService {
                 route.setDuration(request.getDuration());
                 route.setDifficulty(request.getDifficulty());
                 route.setStatus("saved");
-                route.setAiGenerated(0);
+                route.setAiGenerated(request.getAiGenerated() != null ? request.getAiGenerated() : 0);
                 route.setUserId(userId);
                 routeMapper.insert(route);
             }

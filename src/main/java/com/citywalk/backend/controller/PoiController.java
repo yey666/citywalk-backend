@@ -38,6 +38,15 @@ public class PoiController {
         return result;
     }
 
+    @Operation(summary = "专门拉取餐饮服务 POI（美食主题数据源）")
+    @GetMapping("/fetch-food")
+    public Map<String, Object> fetchFood(@RequestParam Long cityId) {
+        int success = amapPoiFetcher.fetchFoodPois(cityId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", success);
+        return result;
+    }
+
     @Operation(summary = "补数据：回填 photos / openHours（每次最多 20 条）")
     @PostMapping("/refresh-photos")
     public Map<String, Object> refreshPhotos(@RequestParam Long cityId) {

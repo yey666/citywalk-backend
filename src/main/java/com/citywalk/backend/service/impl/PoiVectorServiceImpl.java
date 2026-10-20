@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.redis.RedisVectorStore;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -24,6 +25,15 @@ public class PoiVectorServiceImpl implements PoiVectorService {
 
     @Override
     public int initPoiVectors() {
+        // 0. 确保索引存在：flushdb 会把 poi-index 一起清掉，需重建。
+        //    afterPropertiesSet 内部会先 ftList 检查，索引已存在则直接返回，幂等。
+        if (vectorStore instanceof RedisVectorStore redisVectorStore) {
+            redisVectorStore.afterPropertiesSet();
+        } else {
+            log.warn("VectorStore 不是 RedisVectorStore 实例，无法自动重建索引（实际类型：{}）",
+                    vectorStore.getClass().getName());
+        }
+
         // 1. 从 MySQL 读所有 POI
         List<Poi> pois = poiMapper.selectList(null);
         log.info("从数据库读到 {} 个 POI", pois.size());
