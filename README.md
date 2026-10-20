@@ -304,7 +304,7 @@ POST /api/upload
 
 ☑ 部署前端（Netlify）
 
-□ 部署后端
+☑ 部署后端
 
 踩坑文档
 详见 docs/：
