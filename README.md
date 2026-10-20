@@ -1,6 +1,12 @@
 markdown
 # Citywalk - AI 旅行规划平台（后端）
 
+![Java](https://img.shields.io/badge/Java-17-blue.svg)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.5-brightgreen.svg)
+![Spring AI](https://img.shields.io/badge/Spring%20AI-1.0.0--M6-orange.svg)
+![MySQL](https://img.shields.io/badge/MySQL-8.0-blue.svg)
+![Redis](https://img.shields.io/badge/Redis-Stack-red.svg)
+
 基于 Spring Boot + Spring AI 的 Citywalk 规划平台。
 用户从 3D 地球选城市，进城市详情页看景点，到工作台拼计划，
 AI 优化路线，保存后查票，出发前社区看真实反馈。
@@ -8,7 +14,13 @@ AI 优化路线，保存后查票，出发前社区看真实反馈。
 ## 线上地址
 
 - 前端：https://jazzy-sunflower-21226c.netlify.app
-- 后端：部署后填
+- 后端：已部署至阿里云，如需体验请联系作者提供测试环境地址。
+
+## 系统架构设计
+
+> 包含整体架构图与核心业务时序图（RAG 生成路线）
+
+![系统架构图](docs/architecture.png)
 
 ## 技术栈
 
@@ -51,6 +63,7 @@ AI 优化路线，保存后查票，出发前社区看真实反馈。
 - ✅ 个人中心（我的计划、收藏、发布）
 - ✅ 打印页（存到手机 / 分享）
 - ✅ Swagger/Knife4j 接口文档
+- ✅ 后端部署
 
 ### 待实现
 
@@ -58,7 +71,6 @@ AI 优化路线，保存后查票，出发前社区看真实反馈。
 - [ ] Redis 两级缓存（12306 车次 + 余票）
 - [ ] AI 接口限流（Redis 令牌桶）
 - [ ] SSE 流式返回
-- [ ] 后端部署
 
 ## 快速开始
 
