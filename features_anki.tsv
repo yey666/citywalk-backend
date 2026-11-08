@@ -1,0 +1,28 @@
+﻿#separator:tab
+Front	Back
+[M1] 入口 · 控制器只转发	module：MCP票务查询<br>status：已实现<br>input：GET /api/train/query 的 from/to/date 三参数<br>output：透传调用 trainService.query，返回 TrainQueryResponse<br>pitfall：无
+[M2] 握手 · 先握手拿会话	module：MCP票务查询<br>status：已实现<br>input：MCP base-url + endpoint 配置<br>output：mcp-session-id 会话字符串<br>pitfall：响应头无 mcp-session-id 时抛异常（见 M8）
+[M3] 调工具 · 工具名加会话回传	module：MCP票务查询<br>status：已实现<br>input：sessionId + from + to + date<br>output：原始 SSE 响应文本（byte[] 转 UTF-8）<br>pitfall：Accept 需含 text/event-stream，否则可能拿不到 SSE
+[M4] 解析 · 三层逐层拆	module：MCP票务查询<br>status：已实现<br>input：原始 SSE 响应字符串<br>output：TrainQueryResponse 对象<br>pitfall：data 行缺失、content 为空分别抛异常（见 M9/M10）
+[M5] 响应DTO · 席别价格用Map	module：MCP票务查询<br>status：已实现<br>input：内层业务 JSON 的 data 数组<br>output：from/to/date/count/trains 结构化对象<br>pitfall：无
+[M6] 配置 · 地址走配置	module：MCP票务查询<br>status：已实现<br>input：application.yaml 中 citywalk.mcp.base-url/endpoint 键值<br>output：注入 mcpBaseUrl、mcpEndpoint 两个 @Value 字段<br>pitfall：无
+[M7] 异常边界(兜底) · 统一兜底包装	module：MCP票务查询<br>status：已实现<br>input：三个子步骤抛出的任意异常<br>output：统一 RuntimeException 交给全局异常处理器<br>pitfall：会吞掉原始异常类型，仅保留 message
+[M8] 异常:无session · 无会话即失败	module：MCP票务查询<br>status：已实现<br>input：initialize 响应的 HTTP 头<br>output：抛异常终止流程<br>pitfall：若 MCP Server 改协议不返回该头，会在这里失败
+[M9] 异常:无data行 · 无data行即格式错	module：MCP票务查询<br>status：已实现<br>input：原始 SSE 响应<br>output：抛异常终止流程<br>pitfall：非标准 SSE（如 data 前有空格）会被漏判
+[M10] 异常:content空 · 空content即无返回	module：MCP票务查询<br>status：已实现<br>input：JSON-RPC 响应的 result.content<br>output：抛异常终止流程<br>pitfall：无
+[R1] 建库 · 一POI一条向量	module：RAG路线检索<br>status：已实现<br>input：MySQL 全部 POI（poiMapper.selectList(null)）<br>output：存入 Redis Stack 的 Document 数量<br>pitfall：flushdb 会清掉索引，需 afterPropertiesSet 幂等重建
+[R2] Embedding模型 · 显式传模型加维度	module：RAG路线检索<br>status：已实现<br>input：硅基流动 api-key / base-url / model（BAAI/bge-m3）<br>output：注入容器的 EmbeddingModel Bean<br>pitfall：不传 options 会报 Model does not exist
+[R3] VectorStore Bean · 索引名poi-index	module：RAG路线检索<br>status：已实现<br>input：EmbeddingModel + JedisPooled(database 0)<br>output：注入容器的 VectorStore Bean<br>pitfall：索引只能放 database 0，否则检索报错
+[R4] 入口 · 拼偏好成一句	module：RAG路线检索<br>status：已实现<br>input：RouteGenerateRequest（cityId/duration/theme/difficulty）<br>output：RouteGenerateResponse（title+nodes）<br>pitfall：城市名仅用于 Prompt，检索本身不限定城市（靠后续实体过滤）
+[R5] 召回 · 召回30做粗筛	module：RAG路线检索<br>status：已实现<br>input：检索文本 query<br>output：List<Document> 候选（最多 30 条）<br>pitfall：docs 为空抛「未找到相关 POI（请先初始化向量库）」
+[R6] 正则挖poiId · 埋id正则反挖	module：RAG路线检索<br>status：已实现<br>input：每个 Document 的 text<br>output：List<Long> poiIds<br>pitfall：正则匹配不到的文档被过滤并告警，可能丢候选
+[R7] 反查+城市过滤 · 实体过滤限10	module：RAG路线检索<br>status：已实现<br>input：poiIds + request.cityId<br>output：过滤后 ≤10 条完整 POI<br>pitfall：跨城市 POI 不在向量层过滤，必须实体层再过滤一次
+[R8] buildPrompt · 约束防幻觉	module：RAG路线检索<br>status：已实现<br>input：request + 候选 POI 列表 + cityName<br>output：完整 Prompt 字符串<br>pitfall：停留时间约束 30-120 分钟，总时长约 duration 小时
+[R9] ChatClient调用 · ChatClient同步出文	module：RAG路线检索<br>status：已实现<br>input：Prompt 字符串<br>output：DeepSeek 返回的路线 JSON 文本<br>pitfall：返回可能带 markdown 代码块，解析时需剥离
+[R10] parseAiResponse · 剥代码块补坐标	module：RAG路线检索<br>status：已实现<br>input：AI 返回的 JSON 文本 + pois<br>output：RouteGenerateResponse（含 lat/lng 坐标）<br>pitfall：AI 可能返回 ```json 代码块，需先 replaceAll 剥掉再解析
+[R11] 文档切分 · 未做分块	module：RAG路线检索<br>status：未找到<br>input：无<br>output：无<br>pitfall：若 POI 描述变长，缺分块会降低召回精度
+[R12] 相似度阈值 · 无阈值只用topK	module：RAG路线检索<br>status：未找到<br>input：无<br>output：无<br>pitfall：无阈值时无关 POI 也会被 topK 带回，靠后续过滤兜底
+[R13] 重排rerank · 无重排靠LLM	module：RAG路线检索<br>status：未找到<br>input：无<br>output：无<br>pitfall：缺 rerank 时 LLM 只能按 topK 顺序看，可能受召回顺序影响
+[Z1] 设计哲学 · 有状态三步走	module：MCP票务查询<br>status：已实现<br>input：用户查询请求<br>output：结构化票价结果<br>pitfall：无
+[Z2] 设计哲学 · SSE-RPC-业务三层	module：MCP票务查询<br>status：已实现<br>input：原始 SSE 响应<br>output：内层业务 JSON<br>pitfall：无
+[Z3] 设计哲学 · 向量召回LLM精排	module：RAG路线检索<br>status：已实现<br>input：检索文本 → 候选 POI<br>output：LLM 编排出的路线<br>pitfall：无

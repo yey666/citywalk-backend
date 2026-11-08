@@ -26,7 +26,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/rag/**",
                         "/api/route/generate",
                         "/api/route/draft/optimize",     // ← 加这个
-                        "/api/poi/**"
+                        "/api/poi/**",
+                        "/api/guide/**"
                 );
     }
 

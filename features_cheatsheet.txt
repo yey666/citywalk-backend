@@ -1,0 +1,12 @@
+﻿M1 入口→Controller只转发from/to/date
+M2 握手initialize→响应头取mcp-session-id(有状态先拿会话)
+M3 调工具tools/call→name=query-ticket-price+session回传
+M4 解析parseResponse→SSE→JSON-RPC→业务JSON三层拆(result.content[0].text)
+M5 DTO→prices用Map<席别,价格>
+M6 异常→无session/无data行/content空各抛异常,外层统一兜底
+R1 建库initPoiVectors→一POI拼text(poiId+name+category+address)存RedisStack
+R2 Embedding bge-m3 1024维+RedisVectorStore(poi-index,db0);显式传model、覆盖dimensions()
+R3 召回topK=30→正则挖poiId→MySQL反查+cityId过滤limit10
+R4 Prompt约束:只选给定POI 3-5个、停留30-120分、输出严格JSON
+R5 DeepSeek(ChatClient)生成→parseAiResponse剥代码块、readTree、补lat/lng
+Z  哲学→向量只召回LLM精排;MCP有状态三步走+三层剥离

@@ -22,6 +22,8 @@ AI 优化路线，保存后查票，出发前社区看真实反馈。
 
 ![系统架构图](docs/architecture.png)
 
+> 后端系统思维导图（按 5 个维度展开）见 [docs/system-mindmap.md](docs/system-mindmap.md)
+
 ## 技术栈
 
 **后端**
