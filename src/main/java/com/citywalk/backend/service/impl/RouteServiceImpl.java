@@ -233,13 +233,34 @@ public class RouteServiceImpl implements RouteService {
     public Long saveDraft(SaveDraftRequest request) {
         Long userId = UserContext.getUserId();
 
-        Route route;
+        Route route = null;
         if (request.getRouteId() != null) {
-            // 按 routeId 更新：彻底替换节点和车次
+            // 按 routeId 更新：仅当记录存在且属于当前用户才允许更新
             route = routeMapper.selectById(request.getRouteId());
-            if (route == null || route.getUserId() == null || !route.getUserId().equals(userId)) {
+            if (route != null && !userId.equals(route.getUserId())) {
                 throw new IllegalArgumentException("无权修改该计划");
             }
+            if (route == null) {
+                // 脏 routeId（记录已被删除）：清理其残留节点/车次，然后退化为新建
+                routeNodeMapper.delete(new LambdaQueryWrapper<RouteNode>().eq(RouteNode::getRouteId, request.getRouteId()));
+                routeTicketMapper.delete(new LambdaQueryWrapper<RouteTicket>().eq(RouteTicket::getRouteId, request.getRouteId()));
+            }
+        }
+
+        if (route == null) {
+            // 新建草稿：直接按当前用户创建，不做额外权限校验
+            route = new Route();
+            route.setCityId(request.getCityId());
+            route.setTitle(request.getTitle());
+            route.setTheme(request.getTheme());
+            route.setDuration(request.getDuration());
+            route.setDifficulty(request.getDifficulty());
+            route.setStatus("saved");
+            route.setAiGenerated(request.getAiGenerated() != null ? request.getAiGenerated() : 0);
+            route.setUserId(userId);
+            routeMapper.insert(route);
+        } else {
+            // 更新：彻底替换节点和车次
             route.setCityId(request.getCityId());
             route.setTitle(request.getTitle());
             route.setTheme(request.getTheme());
@@ -249,38 +270,6 @@ public class RouteServiceImpl implements RouteService {
             routeMapper.updateById(route);
             routeNodeMapper.delete(new LambdaQueryWrapper<RouteNode>().eq(RouteNode::getRouteId, route.getId()));
             routeTicketMapper.delete(new LambdaQueryWrapper<RouteTicket>().eq(RouteTicket::getRouteId, route.getId()));
-        } else {
-            // 无 routeId：按（用户+城市+标题）找已保存计划，命中则更新，否则新建
-            Route existing = routeMapper.selectOne(
-                    new LambdaQueryWrapper<Route>()
-                            .eq(Route::getUserId, userId)
-                            .eq(Route::getCityId, request.getCityId())
-                            .eq(Route::getStatus, "saved")
-                            .eq(Route::getTitle, request.getTitle())
-                            .orderByDesc(Route::getId)
-                            .last("LIMIT 1")
-            );
-            if (existing != null) {
-                route = existing;
-                route.setTheme(request.getTheme());
-                route.setDuration(request.getDuration());
-                route.setDifficulty(request.getDifficulty());
-                route.setAiGenerated(request.getAiGenerated() != null ? request.getAiGenerated() : route.getAiGenerated());
-                routeMapper.updateById(route);
-                routeNodeMapper.delete(new LambdaQueryWrapper<RouteNode>().eq(RouteNode::getRouteId, route.getId()));
-                routeTicketMapper.delete(new LambdaQueryWrapper<RouteTicket>().eq(RouteTicket::getRouteId, route.getId()));
-            } else {
-                route = new Route();
-                route.setCityId(request.getCityId());
-                route.setTitle(request.getTitle());
-                route.setTheme(request.getTheme());
-                route.setDuration(request.getDuration());
-                route.setDifficulty(request.getDifficulty());
-                route.setStatus("saved");
-                route.setAiGenerated(request.getAiGenerated() != null ? request.getAiGenerated() : 0);
-                route.setUserId(userId);
-                routeMapper.insert(route);
-            }
         }
 
         if (request.getNodes() != null) {
