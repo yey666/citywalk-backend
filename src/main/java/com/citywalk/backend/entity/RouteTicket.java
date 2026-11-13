@@ -23,5 +23,6 @@ public class RouteTicket {
     private String travelDate;
     private String pricesJson;
     private Integer sortOrder;
+    private String note;
     private LocalDateTime createdAt;
 }

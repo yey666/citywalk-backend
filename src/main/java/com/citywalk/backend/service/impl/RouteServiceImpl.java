@@ -68,6 +68,7 @@ public class RouteServiceImpl implements RouteService {
         vo.setDifficulty(route.getDifficulty());
         vo.setBestTime(route.getBestTime());
         vo.setDescription(route.getDescription());
+        vo.setTripDataJson(route.getTripDataJson());
 
         List<RouteNode> nodes = routeNodeMapper.selectList(
                 new LambdaQueryWrapper<RouteNode>()
@@ -124,6 +125,7 @@ public class RouteServiceImpl implements RouteService {
             td.setStartTime(t.getStartTime());
             td.setArriveTime(t.getArriveTime());
             td.setTravelDate(t.getTravelDate());
+            td.setNote(t.getNote());
             if (t.getPricesJson() != null && !t.getPricesJson().isEmpty()) {
                 try {
                     td.setPrices(objectMapper.readValue(t.getPricesJson(), Map.class));
@@ -257,6 +259,7 @@ public class RouteServiceImpl implements RouteService {
             route.setDifficulty(request.getDifficulty());
             route.setStatus("saved");
             route.setAiGenerated(request.getAiGenerated() != null ? request.getAiGenerated() : 0);
+            route.setTripDataJson(request.getTripDataJson());
             route.setUserId(userId);
             routeMapper.insert(route);
         } else {
@@ -267,6 +270,7 @@ public class RouteServiceImpl implements RouteService {
             route.setDuration(request.getDuration());
             route.setDifficulty(request.getDifficulty());
             route.setAiGenerated(request.getAiGenerated() != null ? request.getAiGenerated() : route.getAiGenerated());
+            route.setTripDataJson(request.getTripDataJson());
             routeMapper.updateById(route);
             routeNodeMapper.delete(new LambdaQueryWrapper<RouteNode>().eq(RouteNode::getRouteId, route.getId()));
             routeTicketMapper.delete(new LambdaQueryWrapper<RouteTicket>().eq(RouteTicket::getRouteId, route.getId()));
@@ -295,6 +299,7 @@ public class RouteServiceImpl implements RouteService {
                 rt.setStartTime(ticket.getStartTime());
                 rt.setArriveTime(ticket.getArriveTime());
                 rt.setTravelDate(ticket.getTravelDate());
+                rt.setNote(ticket.getNote());
                 try {
                     rt.setPricesJson(ticket.getPrices() == null ? "{}" : objectMapper.writeValueAsString(ticket.getPrices()));
                 } catch (Exception e) {

@@ -14,6 +14,7 @@ public class SaveDraftRequest {
     private String difficulty;
     private Integer aiGenerated;
     private Long routeId;
+    private String tripDataJson;
     private List<Node> nodes;
     private List<Ticket> tickets;
 
@@ -34,5 +35,6 @@ public class SaveDraftRequest {
         private String arriveTime;
         private String travelDate;
         private Map<String, String> prices;
+        private String note;
     }
 }

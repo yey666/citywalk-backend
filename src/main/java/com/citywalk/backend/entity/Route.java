@@ -30,6 +30,7 @@ public class Route {
     private Integer dayIndex;
     private Long tripId;
     private Integer aiGenerated;
+    private String tripDataJson;
     private Integer viewCount;
     private Integer collectCount;
 }

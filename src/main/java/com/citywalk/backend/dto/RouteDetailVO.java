@@ -15,6 +15,7 @@ public class RouteDetailVO {
     private String difficulty;
     private String bestTime;
     private String description;
+    private String tripDataJson;
     private List<NodeDetail> nodes;
     private List<TicketDetail> tickets;
 
@@ -47,5 +48,6 @@ public class RouteDetailVO {
         private String arriveTime;
         private String travelDate;
         private Map<String, String> prices;
+        private String note;
     }
 }

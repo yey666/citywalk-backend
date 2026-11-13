@@ -24,5 +24,6 @@ public class TrainQueryResponse {
         private String duration;
         private String trainClassName;
         private Map<String, String> prices;  // 席别 -> 价格
+        private Double price;                // 二等座/硬座等醒目展示价
     }
 }

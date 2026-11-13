@@ -174,6 +174,7 @@ public class TrainServiceImpl implements TrainService {
                             prices.put(entry.getKey(), entry.getValue().asText()));
                 }
                 t.setPrices(prices);
+                t.setPrice(extractPrice(prices));
 
                 trains.add(t);
             }
@@ -181,5 +182,23 @@ public class TrainServiceImpl implements TrainService {
         response.setTrains(trains);
 
         return response;
+    }
+
+    /**
+     * 从席别价格表里挑一个醒目的展示价：优先二等座，其次硬座，最后兜底取第一个。
+     */
+    private Double extractPrice(Map<String, String> prices) {
+        if (prices == null || prices.isEmpty()) return null;
+        String[] preferred = {"二等座", "硬座", "商务座", "一等座", "无座"};
+        for (String key : preferred) {
+            String v = prices.get(key);
+            if (v != null && !v.isEmpty()) {
+                try { return Double.parseDouble(v); } catch (NumberFormatException ignored) {}
+            }
+        }
+        for (String v : prices.values()) {
+            try { return Double.parseDouble(v); } catch (NumberFormatException ignored) {}
+        }
+        return null;
     }
 }

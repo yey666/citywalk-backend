@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS route_ticket (
     travel_date  VARCHAR(10)  COMMENT '乘车日期 YYYY-MM-DD',
     prices_json  TEXT         COMMENT '各席别价格 JSON，如 {"二等座":"15.0"}',
     sort_order   INT DEFAULT 0 COMMENT '车次顺序',
+    note         VARCHAR(255) COMMENT '交通备注，如自驾/大巴/拼车',
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_route_ticket (route_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='计划绑定的车次';
