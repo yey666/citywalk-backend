@@ -13,7 +13,7 @@ public class RouteNode {
     private Long id;
 
     private Long routeId;
-    private Long poiId;
+    private String poiId;
     private Integer sortOrder;
     private Integer stayDuration;
     private String tip;

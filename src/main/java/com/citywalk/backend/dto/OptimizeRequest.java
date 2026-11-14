@@ -10,7 +10,7 @@ public class OptimizeRequest {
 
     @Data
     public static class Node {
-        private Long poiId;
+        private String poiId;
         private String name;
         private Double lat;
         private Double lng;

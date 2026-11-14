@@ -22,7 +22,7 @@ public class RouteDetailVO {
     @Data
     public static class NodeDetail {
         private Integer order;
-        private Long poiId;
+        private String poiId;
         private String poiName;
         private String category;
         private String address;

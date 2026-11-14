@@ -20,7 +20,7 @@ public class SaveDraftRequest {
 
     @Data
     public static class Node {
-        private Long poiId;
+        private String poiId;
         private Integer sortOrder;
         private Integer stayDuration;
         private String tip;

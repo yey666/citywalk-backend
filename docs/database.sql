@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS route (
 CREATE TABLE IF NOT EXISTS route_node (
                                           id BIGINT PRIMARY KEY AUTO_INCREMENT,
                                           route_id BIGINT NOT NULL,
-                                          poi_id BIGINT NOT NULL,
+                                          poi_id VARCHAR(64) NOT NULL COMMENT 'POI 标识（高德字符串 ID 或本地 POI ID）',
                                           sort_order INT NOT NULL COMMENT '节点顺序',
                                           stay_duration INT COMMENT '建议停留分钟数',
                                           tip VARCHAR(500) COMMENT '本地人提示',
