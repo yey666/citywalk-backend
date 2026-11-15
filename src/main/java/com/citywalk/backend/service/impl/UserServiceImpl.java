@@ -81,4 +81,17 @@ public class UserServiceImpl implements UserService {
     public User getById(Long id) {
         return userMapper.selectById(id);
     }
+
+    @Override
+    public void updateProfile(Long userId, String nickname) {
+        if (nickname == null || nickname.isBlank()) {
+            throw new IllegalArgumentException("昵称不能为空");
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new IllegalArgumentException("用户不存在");
+        }
+        user.setNickname(nickname.trim());
+        userMapper.updateById(user);
+    }
 }

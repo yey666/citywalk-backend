@@ -20,4 +20,9 @@ public interface UserService {
      * 根据 id 查用户
      */
     User getById(Long id);
+
+    /**
+     * 更新昵称
+     */
+    void updateProfile(Long userId, String nickname);
 }

@@ -63,6 +63,36 @@ public class PostController {
         return result;
     }
 
+    @Operation(summary = "收藏")
+    @PostMapping("/{id}/collect")
+    public Map<String, Object> collect(@PathVariable Long id) {
+        postService.collect(id);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        return result;
+    }
+
+    @Operation(summary = "取消收藏")
+    @DeleteMapping("/{id}/collect")
+    public Map<String, Object> uncollect(@PathVariable Long id) {
+        postService.uncollect(id);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        return result;
+    }
+
+    @Operation(summary = "我发布的帖子")
+    @GetMapping("/my-posts")
+    public List<PostVO> myPosts() {
+        return postService.myPosts();
+    }
+
+    @Operation(summary = "我收藏的帖子")
+    @GetMapping("/my-collects")
+    public List<PostVO> myCollects() {
+        return postService.myCollects();
+    }
+
     @Operation(summary = "发评论")
     @PostMapping("/{id}/comment")
     public CommentVO comment(@PathVariable Long id, @RequestBody Map<String, String> body) {

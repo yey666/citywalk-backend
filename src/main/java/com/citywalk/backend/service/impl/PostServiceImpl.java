@@ -6,13 +6,17 @@ import com.citywalk.backend.dto.PostRequest;
 import com.citywalk.backend.dto.PostVO;
 import com.citywalk.backend.entity.Poi;
 import com.citywalk.backend.entity.Post;
+import com.citywalk.backend.entity.PostCollect;
 import com.citywalk.backend.entity.PostComment;
 import com.citywalk.backend.entity.PostLike;
+import com.citywalk.backend.entity.Route;
 import com.citywalk.backend.entity.User;
 import com.citywalk.backend.mapper.PoiMapper;
+import com.citywalk.backend.mapper.PostCollectMapper;
 import com.citywalk.backend.mapper.PostCommentMapper;
 import com.citywalk.backend.mapper.PostLikeMapper;
 import com.citywalk.backend.mapper.PostMapper;
+import com.citywalk.backend.mapper.RouteMapper;
 import com.citywalk.backend.mapper.UserMapper;
 import com.citywalk.backend.service.PostService;
 import com.citywalk.backend.util.UserContext;
@@ -40,8 +44,10 @@ public class PostServiceImpl implements PostService {
     private final PostMapper postMapper;
     private final PostLikeMapper postLikeMapper;
     private final PostCommentMapper postCommentMapper;
+    private final PostCollectMapper postCollectMapper;
     private final UserMapper userMapper;
     private final PoiMapper poiMapper;
+    private final RouteMapper routeMapper;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -123,6 +129,70 @@ public class PostServiceImpl implements PostService {
     }
 
     @Override
+    @Transactional
+    public void collect(Long postId) {
+        Long userId = UserContext.getUserId();
+        Long count = postCollectMapper.selectCount(
+                new LambdaQueryWrapper<PostCollect>()
+                        .eq(PostCollect::getUserId, userId)
+                        .eq(PostCollect::getPostId, postId)
+        );
+        if (count != null && count > 0) {
+            return; // 已收藏，幂等
+        }
+        PostCollect collect = new PostCollect();
+        collect.setUserId(userId);
+        collect.setPostId(postId);
+        collect.setCreatedAt(LocalDateTime.now());
+        postCollectMapper.insert(collect);
+    }
+
+    @Override
+    @Transactional
+    public void uncollect(Long postId) {
+        Long userId = UserContext.getUserId();
+        postCollectMapper.delete(
+                new LambdaQueryWrapper<PostCollect>()
+                        .eq(PostCollect::getUserId, userId)
+                        .eq(PostCollect::getPostId, postId)
+        );
+    }
+
+    @Override
+    public List<PostVO> myPosts() {
+        Long userId = UserContext.getUserId();
+        List<Post> posts = postMapper.selectList(
+                new LambdaQueryWrapper<Post>()
+                        .eq(Post::getUserId, userId)
+                        .orderByDesc(Post::getId)
+        );
+        return toVos(posts);
+    }
+
+    @Override
+    public List<PostVO> myCollects() {
+        Long userId = UserContext.getUserId();
+        List<PostCollect> collects = postCollectMapper.selectList(
+                new LambdaQueryWrapper<PostCollect>()
+                        .eq(PostCollect::getUserId, userId)
+                        .orderByDesc(PostCollect::getId)
+        );
+        if (collects.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Long> postIds = collects.stream().map(PostCollect::getPostId).collect(Collectors.toList());
+        List<Post> posts = postMapper.selectBatchIds(postIds);
+        // 保持收藏时间倒序
+        Map<Long, Post> postMap = posts.stream().collect(Collectors.toMap(Post::getId, Function.identity()));
+        List<Post> ordered = new ArrayList<>();
+        for (PostCollect c : collects) {
+            Post p = postMap.get(c.getPostId());
+            if (p != null) ordered.add(p);
+        }
+        return toVos(ordered);
+    }
+
+    @Override
     public List<CommentVO> comments(Long postId) {
         List<PostComment> comments = postCommentMapper.selectList(
                 new LambdaQueryWrapper<PostComment>()
@@ -189,6 +259,11 @@ public class PostServiceImpl implements PostService {
         Map<Long, Poi> pois = poiIds.isEmpty() ? Collections.emptyMap()
                 : poiMapper.selectBatchIds(poiIds).stream().collect(Collectors.toMap(Poi::getId, Function.identity()));
 
+        Set<Long> routeIds = posts.stream().map(Post::getRouteId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, Route> routes = routeIds.isEmpty() ? Collections.emptyMap()
+                : routeMapper.selectBatchIds(routeIds).stream().collect(Collectors.toMap(Route::getId, Function.identity()));
+
         Long currentUserId = UserContext.getUserId();
 
         List<PostVO> vos = new ArrayList<>();
@@ -209,14 +284,28 @@ public class PostServiceImpl implements PostService {
                 vo.setPoiName(pois.get(p.getPoiId()).getName());
             }
 
+            // 标签与天数：优先从关联行程推导
+            if (p.getRouteId() != null && routes.get(p.getRouteId()) != null) {
+                vo.setTag("跨城大环线");
+                vo.setDays(computeDays(routes.get(p.getRouteId()).getTripDataJson()));
+            } else if (p.getPoiId() != null) {
+                vo.setTag("城市漫游");
+            } else {
+                vo.setTag("游记");
+            }
+
             vo.setLikeCount(postLikeMapper.selectCount(
                     new LambdaQueryWrapper<PostLike>().eq(PostLike::getPostId, p.getId())
             ).intValue());
             vo.setCommentCount(postCommentMapper.selectCount(
                     new LambdaQueryWrapper<PostComment>().eq(PostComment::getPostId, p.getId())
             ).intValue());
+            vo.setCollectCount(postCollectMapper.selectCount(
+                    new LambdaQueryWrapper<PostCollect>().eq(PostCollect::getPostId, p.getId())
+            ).intValue());
 
             vo.setLiked(false);
+            vo.setCollected(false);
             if (currentUserId != null) {
                 Long liked = postLikeMapper.selectCount(
                         new LambdaQueryWrapper<PostLike>()
@@ -224,6 +313,13 @@ public class PostServiceImpl implements PostService {
                                 .eq(PostLike::getPostId, p.getId())
                 );
                 vo.setLiked(liked != null && liked > 0);
+
+                Long collected = postCollectMapper.selectCount(
+                        new LambdaQueryWrapper<PostCollect>()
+                                .eq(PostCollect::getUserId, currentUserId)
+                                .eq(PostCollect::getPostId, p.getId())
+                );
+                vo.setCollected(collected != null && collected > 0);
             }
             vos.add(vo);
         }
@@ -236,6 +332,27 @@ public class PostServiceImpl implements PostService {
         }
         vo.setAuthorNickname(user.getNickname() != null ? user.getNickname() : user.getUsername());
         vo.setAuthorAvatar(user.getAvatar());
+    }
+
+    // 从 tripDataJson 里数城市节点，推导“3天2晚”之类的天数文案
+    private String computeDays(String tripDataJson) {
+        if (tripDataJson == null || tripDataJson.isBlank()) {
+            return null;
+        }
+        try {
+            List<Map<String, Object>> nodes = objectMapper.readValue(
+                    tripDataJson, new TypeReference<List<Map<String, Object>>>() {});
+            long cityCount = nodes.stream().filter(n -> "city".equals(n.get("type"))).count();
+            if (cityCount >= 2) {
+                return cityCount + "天" + (cityCount - 1) + "晚";
+            }
+            if (cityCount == 1) {
+                return "1天";
+            }
+        } catch (Exception e) {
+            // 解析失败就不展示天数
+        }
+        return null;
     }
 
     private void fillAuthor(CommentVO vo, User user) {

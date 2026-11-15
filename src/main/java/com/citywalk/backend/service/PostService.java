@@ -19,6 +19,14 @@ public interface PostService {
 
     void unlike(Long postId);
 
+    void collect(Long postId);
+
+    void uncollect(Long postId);
+
+    List<PostVO> myPosts();
+
+    List<PostVO> myCollects();
+
     List<CommentVO> comments(Long postId);
 
     CommentVO addComment(Long postId, String content);
