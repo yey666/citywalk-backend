@@ -30,4 +30,9 @@ public interface RouteService {
     void deleteRoute(Long routeId, Long userId);
     void deleteTicket(Long routeId, Long ticketId);
 
+    /**
+     * H5 更新某个景点的打卡/日记/照片（写入 tripDataJson）
+     */
+    void updateH5Poi(Long routeId, String poiId, Boolean isCompleted, String userNote, String userPhoto);
+
 }

@@ -101,4 +101,17 @@ public class RouteController {
         return result;
     }
 
+    @Operation(summary = "H5 更新景点的打卡/日记/照片")
+    @PutMapping("/route/{routeId}/h5/poi")
+    public Map<String, Object> updateH5Poi(@PathVariable Long routeId, @RequestBody Map<String, Object> body) {
+        String poiId = body.get("poiId") == null ? null : String.valueOf(body.get("poiId"));
+        Boolean isCompleted = body.get("isCompleted") == null ? null : (Boolean) body.get("isCompleted");
+        String userNote = body.get("userNote") == null ? null : String.valueOf(body.get("userNote"));
+        String userPhoto = body.get("userPhoto") == null ? null : String.valueOf(body.get("userPhoto"));
+        routeService.updateH5Poi(routeId, poiId, isCompleted, userNote, userPhoto);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        return result;
+    }
+
 }

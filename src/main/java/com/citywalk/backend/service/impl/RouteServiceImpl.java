@@ -18,6 +18,8 @@ import com.citywalk.backend.mapper.UserRouteMapper;
 import com.citywalk.backend.service.RouteService;
 import com.citywalk.backend.util.UserContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -228,6 +230,47 @@ public class RouteServiceImpl implements RouteService {
                         .eq(RouteTicket::getId, ticketId)
                         .eq(RouteTicket::getRouteId, routeId)
         );
+    }
+
+    @Override
+    @Transactional
+    public void updateH5Poi(Long routeId, String poiId, Boolean isCompleted, String userNote, String userPhoto) {
+        Route route = routeMapper.selectById(routeId);
+        if (route == null) {
+            throw new IllegalArgumentException("行程不存在");
+        }
+        String json = route.getTripDataJson();
+        if (json == null || json.isBlank()) {
+            return;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            if (!root.isArray()) return;
+
+            boolean found = false;
+            for (JsonNode city : root) {
+                JsonNode pois = city.get("pois");
+                if (pois == null || !pois.isArray()) continue;
+                for (JsonNode poi : pois) {
+                    JsonNode pid = poi.get("poiId");
+                    String pidStr = pid == null ? null : pid.asText();
+                    if (poiId != null && poiId.equals(pidStr) && poi instanceof ObjectNode) {
+                        ObjectNode p = (ObjectNode) poi;
+                        if (isCompleted != null) p.put("is_completed", isCompleted);
+                        if (userNote != null) p.put("user_note", userNote);
+                        if (userPhoto != null) p.put("user_photo", userPhoto);
+                        found = true;
+                    }
+                }
+            }
+            if (found) {
+                route.setTripDataJson(objectMapper.writeValueAsString(root));
+                routeMapper.updateById(route);
+            }
+        } catch (Exception e) {
+            log.error("更新 H5 行程 POI 失败", e);
+            throw new RuntimeException("更新失败");
+        }
     }
 
     @Override
