@@ -55,13 +55,17 @@ AI 优化路线，保存后查票，出发前社区看真实反馈。
 - ✅ 城市列表 + 城市详情
 - ✅ 官方路线列表 + 路线详情
 - ✅ AI 路线生成（RAG 检索 + DeepSeek 编排）
+- ✅ AI 导游（SSE 流式对话 + 工具调用查真实 POI + 地图联动指令）
 - ✅ TSP 路线优化（Haversine + 暴力/贪心）
 - ✅ 12306 票价查询（MCP 协议接入）
 - ✅ 车次绑定到计划（route_ticket 表）
 - ✅ 节点间交通摘要（高德 transit + 跳高德导航）
 - ✅ 用户系统（注册、登录、JWT 拦截器）
+- ✅ 个人资料修改（昵称 / 头像）
 - ✅ 路线保存 + 我的计划
+- ✅ 路线内 H5 打卡 / 日记 / 照片
 - ✅ 社区（帖子、点赞、评论、图片上传、POI 联动）
+- ✅ 帖子收藏（收藏 / 取消收藏 + 我的收藏）
 - ✅ 个人中心（我的计划、收藏、发布）
 - ✅ 打印页（存到手机 / 分享）
 - ✅ Swagger/Knife4j 接口文档
@@ -69,10 +73,9 @@ AI 优化路线，保存后查票，出发前社区看真实反馈。
 
 ### 待实现
 
-- [ ] 多天计划（route 表 day_index / trip_id 已预留）
+- [ ] 多天计划（`route.day_index` / `trip_id` 仍是预留字段，未被写入；当前跨城多天行程由 `route.trip_data_json` 承载）
 - [ ] Redis 两级缓存（12306 车次 + 余票）
 - [ ] AI 接口限流（Redis 令牌桶）
-- [ ] SSE 流式返回
 
 ## 快速开始
 
@@ -106,15 +109,24 @@ docker run -d --name redis-citywalk -p 6379:6379 redis/redis-stack-server:7.2.0-
 docker run -d -p 8000:8000 --name mcp-12306 drfccv/mcp-server-12306:latest
 ```
 
-3. 初始化数据库（详细顺序见 docs/DEPLOYMENT.md）：
+3. 建库（只建空库，表结构由 Flyway 在启动时自动创建）：
 
 ```bash
-mysql -u root -p < docs/database.sql
-mysql -u root -p citywalk < docs/community.sql
-mysql -u root -p citywalk < docs/migration-create-all-missing-tables.sql
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS citywalk DEFAULT CHARACTER SET utf8mb4;"
 ```
 
-4. 配置 application.yaml：填入 MySQL、高德、硅基流动、DeepSeek、JWT secret。
+   启动时会自动执行 `src/main/resources/db/migration/` 下的 V1–V7 迁移，**不需要手动建表**。
+
+   > `docs/database.sql`、`docs/community.sql` 是 Flyway 之前的历史脚本（建表内容与迁移重复），新环境不要执行，否则可能与迁移冲突。需要佛山示例数据时，再单独导入 `docs/foshan-data.sql`（纯 INSERT）。
+
+4. 配置：从模板复制后填入真实值：
+
+```bash
+cp src/main/resources/application.yaml.example src/main/resources/application.yaml
+# Windows: copy src\main\resources\application.yaml.example src\main\resources\application.yaml
+```
+
+   `application.yaml` 已被 `.gitignore` 排除（含密钥），需自行填写 MySQL、高德、硅基流动（Embedding）、DeepSeek 与 JWT secret。
 
 5. 启动：
 
@@ -205,6 +217,8 @@ MCP 不是普通 REST，是 JSON-RPC 2.0 + SSE
 POI 联动：抽屉「查看全部反馈」→ /community?poiId=xxx
 
 接口清单
+标注 🔒 的接口需要请求头 Authorization: Bearer <token>；未标注的匿名可访问（JWT 拦截器对 GET 一律放行，运维类与公开接口在放行名单内）。
+
 认证
 
 POST /api/auth/register
@@ -225,17 +239,35 @@ GET /api/poi/by-city/{cityId}
 
 GET /api/poi/search?keyword=
 
-路线
+GET /api/poi/fetch?cityId=&debug=
+
+GET /api/poi/fetch-food?cityId=
+
+POST /api/poi/refresh-photos?cityId=
+
+GET /api/poi/backfill-amap-id?cityId=
+
+路线与计划
 
 GET /api/route/{id}
 
-POST /api/route/save-draft
+POST /api/route/save-draft 🔒
 
 POST /api/route/draft/optimize
 
 GET /api/route/{id}/transit
 
-DELETE /api/route/{routeId}/tickets/{ticketId}
+POST /api/route/{id}/save 🔒
+
+DELETE /api/route/{id} 🔒
+
+DELETE /api/route/{routeId}/tickets/{ticketId} 🔒
+
+PUT /api/route/{routeId}/h5/poi
+
+GET /api/user/routes
+
+GET /api/user/my-plans
 
 票务
 
@@ -251,25 +283,41 @@ GET /api/rag/search
 
 POST /api/rag/generate-route
 
+AI 导游
+
+POST /api/guide/chat
+
 社区
 
 GET /api/post/list?poiId=&page=&size=
 
 GET /api/post/{id}
 
-POST /api/post
+POST /api/post 🔒
 
-POST /api/post/{id}/like
+POST /api/post/{id}/like 🔒
 
-DELETE /api/post/{id}/like
+DELETE /api/post/{id}/like 🔒
 
-POST /api/post/{id}/comment
+POST /api/post/{id}/collect 🔒
+
+DELETE /api/post/{id}/collect 🔒
+
+POST /api/post/{id}/comment 🔒
 
 GET /api/post/{id}/comments
 
+GET /api/post/my-posts
+
+GET /api/post/my-collects
+
+用户
+
+PUT /api/user/profile 🔒
+
 上传
 
-POST /api/upload
+POST /api/upload 🔒
 
 开发进度
 ☑ 环境搭建
